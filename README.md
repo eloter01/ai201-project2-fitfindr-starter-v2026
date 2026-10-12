@@ -59,24 +59,66 @@
 
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Finds listings that match the user's words, and filters
+  them by size and price when those are given. It doesn't call the model.
+- **Inputs:** `description` (str): keywords like `"vintage graphic tee"`.
+  `size` (str or None): a size like `"M"`, `"US 8"` or `"W30"`, or None to
+  skip the size filter. `max_price` (float or None): the highest price
+  allowed, inclusive, or None to skip the price filter.
+- **Returns:** A list of listing dicts, best match first, at most 10
+  (`config.SEARCH_RESULT_LIMIT`). Each dict has all 11 listing fields: `id`,
+  `title`, `description`, `category`, `style_tags` (list), `size`,
+  `condition`, `price` (float), `colors` (list), `brand` (str or None),
+  `platform`.
+- **When it has nothing:** Returns an empty list `[]`, never None, and doesn't
+  raise. This happens when no listing passes the size and price filters, or
+  when none shares a word with the description.
+- **How it ranks:** Each word in `description` scores 1 point if it appears as
+  a whole word in the listing's title, description, category, style_tags or
+  colors. Case doesn't matter. Filler words like "a", "in", "for", "looking"
+  and "size" are skipped, because "a" alone appears in 18 of the 40 listings.
+  Listings that score 0 are dropped. Higher scores come first, and ties keep
+  the order of the listings file.
+- **How sizes match:** Any listing whose size includes "One Size" passes the
+  size filter, since it's made to fit everyone. For the rest, both sizes are
+  split into words on spaces, `/` and parentheses. A listing matches if every
+  word of the requested size is in the listing's size. So `M` matches `S/M`
+  and `M/L`, `L` does not match `XL`, `S` does not match `US 9`, `US 8` does
+  not match `US 8.5`, and `W30` matches `W30 L30`.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Asks the model, through `generate()`, for one or two
+  outfits that pair the new item with clothes the user already owns. The
+  prompt uses the item's title, category, colors and style_tags. It doesn't
+  use `brand`, since only 8 of the 40 listings have one.
+- **Inputs:** `new_item` (dict): one listing dict from `search_listings`.
+  `wardrobe` (dict): `{"items": [...]}`, where each item has `id`, `name`,
+  `category`, `colors` (list), `style_tags` (list) and `notes` (str or None).
+- **Returns:** A non-empty string with one or two outfit ideas in plain text.
+  Each outfit names the wardrobe pieces it uses by their `name`, like
+  "Baggy straight-leg jeans, dark wash".
+- **When it has nothing:** If `wardrobe["items"]` is empty, it returns general
+  styling advice for the item instead of naming owned pieces. If the model
+  sends back empty text, it returns a short message saying no outfit could be
+  suggested. It never returns `""` or None. If the model can't be reached, it
+  raises `ModelUnavailable`, which `run_agent` catches.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Asks the model, through `generate()`, to write a short
+  caption someone would actually post about the find, based on the outfit
+  suggestion.
+- **Inputs:** `outfit` (str): the text `suggest_outfit` returned. `new_item`
+  (dict): the same listing dict that went into `suggest_outfit`.
+- **Returns:** A string with a casual caption of 2 to 4 sentences. It mentions
+  the item, its price and its platform once each. The wording changes from run
+  to run.
+- **When it has nothing:** If `outfit` is empty or only whitespace, it returns
+  a message saying there's no outfit to write about, without calling the
+  model. If the model sends back empty text, it returns a message saying the
+  caption couldn't be written. It doesn't raise in either case. If the model
+  can't be reached, it raises `ModelUnavailable`, which `run_agent` catches.
 
 ---
 
@@ -93,7 +135,11 @@
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:**
+**Branch rule:** If `search_listings` returns an empty list, put a message in
+`session["error"]` that says what the user could change (broader words, a
+different size, or a higher price), and return the session without calling
+`suggest_outfit`. Otherwise, put the first result in `session["selected_item"]`
+and go to `suggest_outfit`.
 
 **Where it lives:** `agent.py::run_agent`
 
