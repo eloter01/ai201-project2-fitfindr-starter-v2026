@@ -13,9 +13,6 @@
 > python app.py ask 'vintage graphic tee under $30'
 > ```
 >
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
->
 > **The rest of this file is your submission.** Fill it in as you go.
 
 ---
@@ -41,6 +38,12 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
+FitFindr helps you shop for thrifted clothes. You type what you want in plain
+words, like 'vintage graphic tee under $30', and it searches 40 sample
+listings from Depop, thredUp and Poshmark for the best match. Then it suggests
+one or two outfits that pair the item with clothes you already own, and writes
+a short caption you could post about the find. If nothing matches, it stops
+and tells you what to change in your search.
 
 
 ---
@@ -148,9 +151,30 @@ and go to `suggest_outfit`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regex, in `agent.py::parse_query`. It pulls out
+a price (`under $30`), a size (`size M`, `size US 8.5`, `size W30`, or a size
+after a comma at the end, like `tee, M`), and uses the rest as the
+description. I used regex instead of the model because it's free, gives the
+same answer every time, and when it gets something wrong I can see why in the
+pattern. The downside is that it misses phrasing it doesn't know. A price
+without a dollar sign (`under 30`, `under thirty dollars`) and a shoe size
+without "US" (`size 8`) aren't picked up. Those words stay in the description
+and that filter is skipped, with no warning.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** Each step writes its result into the
+session, and the next step reads its input back out of it:
+
+1. `query`: what the user typed.
+2. `parsed`: the description, size and max price from `parse_query`.
+3. `search_results`: the list `search_listings` returned.
+4. `selected_item`: the first search result.
+5. `outfit_suggestion`: what `suggest_outfit` returned for `selected_item`
+   and `wardrobe`.
+6. `fit_card`: what `create_fit_card` returned for `outfit_suggestion` and
+   `selected_item`.
+
+If the run stops early (an empty search, or the model can't be reached),
+`error` gets a message and the fields after that point stay None.
 
 ---
 
@@ -250,15 +274,35 @@ Scored these vintage levis 501 jeans on depop for $38 and I am obsessed. The med
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* My instructor gave us helper code for
+  `search_listings` (a stopword list, keyword matching and size matching). I
+  gave it to Claude and asked where it went and how to build the tool around
+  it.
+- *What came back:* Claude ran the code before using it and found that it
+  crashed on any search with a size. `p.strip().upper` was missing its `()`,
+  so it raised an `AttributeError`. It also found two places where the code
+  didn't match my Tool Inventory: "looking" and "size" weren't skipped as
+  filler words, and `W30` didn't match `W30 L30`.
+- *What I changed:* I had Claude fix the `.upper()` call and add "looking"
+  and "size" to the stopword list. For `W30`, I chose to change my README
+  instead of the code, because splitting sizes on spaces would have made
+  `US 8` match `US 9`.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Claude to check my draft criteria: how it would
+  test each one using only the sentence, whether two people would score it
+  the same, and what would make it fail.
+- *What came back:* It said criterion 5 (a model outage gives a message, not
+  a traceback) could never fail through `app.py` or `run_eval.py`, because
+  both already catch every error and hide the traceback. It also said
+  criterion 4 compared 10 items, so it didn't fit the 5-try run log, and that
+  the ids in criterion 3 don't show up in the trace.
+- *What I changed:* I rewrote criterion 5 so it runs through `run_eval.py`
+  with a broken API key and passes only if each try shows "stopped early"
+  instead of "CRASHED" and the message names the key. I changed criterion 4
+  to one query run 5 times, and criterion 3 to compare titles, which do show
+  up in the trace.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
