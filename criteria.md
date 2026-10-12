@@ -25,9 +25,16 @@ Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
 **Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+I test this with one query I've checked against the data ('vintage graphic tee
+under $30'), run 5 times. A try where search comes back empty counts as a fail,
+since I know a listing matches. I parse the query with regex, so the parse and
+the search give the same result every try. The only parts that can change
+between tries are the two model calls, and a run can still fail there, for
+example if the rate limiter runs out of retries. I'm allowing one miss out of
+five for that.
+
+**note**
+assumes regex parsing
 
 ---
 
@@ -37,68 +44,69 @@ Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
 **Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+The logic should point to this every time a query matches no listings; no
+exceptions. This path stops right after search, so it never calls the model,
+and nothing random can change the result.
 
 ---
 
-## 3. Something about state
+## 3. The same item reaches every tool
 
-<!-- YOU WRITE THIS ONE.
-
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
+For one matching query ('vintage graphic tee under $30') run 5 times, the same
+listing title appears in all four places: the first search result,
+`session["selected_item"]`, and the inputs of the `suggest_outfit` and
+`create_fit_card` steps in the trace, in 5 of 5 tries.
 
 **Why this target:**
-
-
+The handoff is plain code moving a dict through the session, with no model
+involved, so nothing varies between runs. A mismatch would mean a bug in my
+loop, like arguments in the wrong order or reading the wrong session key, and
+that bug would show up in every run, not occasionally. That's also why one
+query run 5 times is enough. I compare titles because all 40 are unique and
+they already show up in the run log and the trace.
 
 ---
 
-## 4. Something about the fit card
+## 4. Repeat runs don't reuse an opening sentence
 
-<!-- YOU WRITE THIS ONE.
-
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
+For one matching query ('vintage graphic tee under $30') run 5 times, each fit
+card's opening sentence matches no other card's, in 5 of 5 tries. The opening
+sentence is the text before the first line break or the first period,
+exclamation point, or question mark followed by a space, or the whole caption
+if none of those appear. Sentences are compared ignoring capitalization, emoji,
+and punctuation.
 
 **Why this target:**
-
-
+My prompt is identical every try, so the temperature (0.9) is the only thing
+pushing the cards apart. If the model has a go-to opener, this is where it
+shows up first, and that's the failure I actually care about. I ignore emoji
+and punctuation because a stock opener with a different emoji at the end is
+still a stock opener. The target is 5 of 5 because a shared opener fails both
+tries that share it, so 4 of 5 can't happen.
 
 ---
 
-## 5. Your choice
+## 5. A model outage stops the run with a message instead of crashing
 
-<!-- YOU WRITE THIS ONE TOO.
-
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
-
-
+With one character of `GEMINI_API_KEY` changed in `.env`, a matching query run
+through `python run_eval.py` shows "stopped early" instead of "CRASHED", and
+the message names the API key as the problem, in 5 of 5 tries.
 
 **Why this target:**
+The error handling should work every time, since there's no randomness in it.
+`generate.py` turns every way the model can be unreachable (bad key, no
+network, bad model name) into the same `ModelUnavailable` error, so one trigger
+tests the one handler. A miss would mean the handler is missing or wraps the
+wrong step. The query has to be one that matches, and the message has to name
+the key, so an empty search can't pass this by accident.
 
-
+**Note**
+needs its own run. Use the broken key with --label outage and read only that row. Change the key back afterward, or every later run will fail too.
 
 ---
+
+**note**
+Criteria 1, 3, and 4 all use the same query. In scenarios.py, list it once each under criterion 1, 3, and 4 so each gets its own row in the run log.
 
 <!-- ─────────────────────────────────────────────────────────────────────────
      UNIT 4 — read this before you change anything above.
