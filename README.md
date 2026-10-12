@@ -77,14 +77,16 @@
   a whole word in the listing's title, description, category, style_tags or
   colors. Case doesn't matter. Filler words like "a", "in", "for", "looking"
   and "size" are skipped, because "a" alone appears in 18 of the 40 listings.
-  Listings that score 0 are dropped. Higher scores come first, and ties keep
-  the order of the listings file.
+  One-character words, like the "8" in "size 8", are skipped too. Listings
+  that score 0 are dropped. Higher scores come first, and ties keep the order
+  of the listings file.
 - **How sizes match:** Any listing whose size includes "One Size" passes the
-  size filter, since it's made to fit everyone. For the rest, both sizes are
-  split into words on spaces, `/` and parentheses. A listing matches if every
-  word of the requested size is in the listing's size. So `M` matches `S/M`
-  and `M/L`, `L` does not match `XL`, `S` does not match `US 9`, `US 8` does
-  not match `US 8.5`, and `W30` matches `W30 L30`.
+  size filter, since it's made to fit everyone. For the rest, anything in
+  parentheses is dropped and each size is split on `/` into options, so `S/M`
+  becomes `S` and `M`, and `XL (oversized)` becomes `XL`. A listing matches if
+  it shares at least one option with the requested size, ignoring case. So `M`
+  matches `S/M` and `M/L`, `L` does not match `XL`, `S` does not match
+  `US 9`, `US 8` does not match `US 8.5`, and `W30` does not match `W30 L30`.
 
 ### `suggest_outfit`
 
@@ -167,7 +169,7 @@ $ python app.py ask '...'
 
 ```
 $ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
-
+[{'id': 'lst_002', 'title': 'Y2K Baby Tee — Butterfly Print', 'description': 'Super cute early 2000s baby tee with butterfly graphic. Fitted crop length. Tag says medium but fits like a small.', 'category': 'tops', 'style_tags': ['y2k', 'vintage', 'graphic tee', 'cottagecore'], 'size': 'S/M', 'condition': 'excellent', 'price': 18.0, 'colors': ['white', 'pink', 'purple'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_006', 'title': 'Graphic Tee — 2003 Tour Bootleg Style', 'description': 'Vintage-style bootleg tee with faded graphic. Slightly boxy fit. 100% cotton, soft and worn-in.', 'category': 'tops', 'style_tags': ['graphic tee', 'vintage', 'grunge', 'streetwear', 'band tee'], 'size': 'L', 'condition': 'good', 'price': 24.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_017', 'title': 'Mesh Long-Sleeve Top — Black', 'description': 'Sheer black mesh long-sleeve. Great for layering under a graphic tee or over a bralette. Stretchy material, fits true to size.', 'category': 'tops', 'style_tags': ['y2k', 'grunge', 'goth', 'layering'], 'size': 'S/M', 'condition': 'excellent', 'price': 15.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_033', 'title': 'Vintage Band Tee — Faded Grey', 'description': 'Faded grey band-style tee with distressed graphic. Crew neck. Fits boxy. Well-loved but no holes or major damage.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'band tee', 'graphic tee', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 19.0, 'colors': ['grey', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_011', 'title': 'Low-Rise Cargo Pants — Khaki', 'description': 'Y2K era low-rise cargo pants. Lots of pockets. Khaki color, slightly distressed at the hems. Great for layering with a long tee.', 'category': 'bottoms', 'style_tags': ['y2k', 'cargo', '2000s', 'streetwear'], 'size': 'W29', 'condition': 'fair', 'price': 27.0, 'colors': ['khaki', 'tan'], 'brand': None, 'platform': 'poshmark'}, {'id': 'lst_015', 'title': 'Vintage Graphic Hoodie — Faded Black', 'description': 'Faded black pullover hoodie with barely-visible vintage graphic on the chest. Cozy interior. Some pilling but adds to the worn-in look.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'graphic', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 26.0, 'colors': ['black', 'charcoal'], 'brand': None, 'platform': 'depop'}]
 ```
 
 ```

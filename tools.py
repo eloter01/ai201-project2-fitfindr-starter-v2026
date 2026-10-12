@@ -20,9 +20,57 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
-import config  # noqa: F401 — you'll use this in search_listings
+import re
+
+import config
 from generate import generate
 from utils.data_loader import load_listings
+
+
+# ── search helpers ────────────────────────────────────────────────────────────
+
+# "looking" and "size" are here because parse_query leaves them in the
+# description ("looking for a ...", "size 8"), and both appear in listings.
+_STOPWORDS = {
+    "a", "an", "and", "the", "for", "with", "under", "over", "in", "of",
+    "looking", "size",
+}
+
+
+def _keywords(text: str | None) -> set[str]:
+    """Lowercase words worth matching on, stopwords removed."""
+    words = re.findall(r"[a-z0-9']+", (text or "").lower())
+    return {w for w in words if w not in _STOPWORDS and len(w) > 1}
+
+
+def _listing_keywords(listing: dict) -> set[str]:
+    """Searchable words from a listing's text, category, tags and colors."""
+    text = " ".join([
+        listing["title"],
+        listing["description"],
+        listing["category"],
+        *listing["style_tags"],
+        *listing["colors"],
+    ])
+    return _keywords(text)
+
+
+def _size_tokens(size: str | None) -> set[str]:
+    """Split a size on "/" into uppercase options, minus any parentheses."""
+    cleaned = re.sub(r"\([^)]*\)", " ", size or "")  # drop parentheticals
+    parts = [p.strip().upper() for p in cleaned.split("/")]
+    return {p for p in parts if p}
+
+
+def _size_matches(wanted: str | None, listing_size: str) -> bool:
+    """True if no size was asked for, or the listing shares an option."""
+    if not wanted:
+        return True
+    listing_tokens = _size_tokens(listing_size)
+    # One Size items are made to fit everyone, so they pass any size filter.
+    if any(token.startswith("ONE SIZE") for token in listing_tokens):
+        return True
+    return bool(_size_tokens(wanted) & listing_tokens)
 
 
 # ── Tool 1: search_listings ───────────────────────────────────────────────────
@@ -67,19 +115,26 @@ def search_listings(
     realistic — thrift listings often have no brand. If something you write
     assumes a brand is always there, you will find out in unit 4.
 
-    TODO:
-        1. Load every listing with load_listings().
-        2. Filter by max_price and by size, when each is provided.
-        3. Score what's left by keyword overlap with `description`.
-        4. Drop anything scoring zero.
-        5. Sort by score, highest first, and return the listing dicts —
-           at most config.SEARCH_RESULT_LIMIT of them.
-
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    wanted_words = _keywords(description)
+    if not wanted_words:
+        return []
+
+    scored = []
+    for listing in load_listings():
+        if max_price is not None and listing["price"] > max_price:
+            continue
+        if not _size_matches(size, listing["size"]):
+            continue
+        score = len(wanted_words & _listing_keywords(listing))
+        if score > 0:
+            scored.append((score, listing))
+
+    # sort() is stable, so listings with equal scores keep their file order.
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [listing for _, listing in scored[: config.SEARCH_RESULT_LIMIT]]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
