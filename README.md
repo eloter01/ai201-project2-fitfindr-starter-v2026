@@ -164,8 +164,44 @@ and go to `suggest_outfit`.
 **One full query**
 
 ```
-$ python app.py ask '...'
+$ AI201_CACHE=0 python app.py ask 'vintage graphic tee under $30'
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+      →    10 match(es)
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+[4] suggest_outfit
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Outfit 1 Y2K Baby Tee — Butterfly Print Baggy straight-leg jeans, dark wash Vintage black denim jacket Chunky …
+      →    10 wardrobe item(s)
+[5] create_fit_card
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: scored this cute little butterfly print y2k baby tee on depop for just $18 and i am obsessed. it looks so good…
 
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   Outfit 1
+Y2K Baby Tee — Butterfly Print
+Baggy straight-leg jeans, dark wash
+Vintage black denim jacket
+Chunky white sneakers
+Black crossbody bag
+This look balances the ultra-feminine butterfly graphic with chunky streetwear staples for a classic 2000s contrast.
+
+Outfit 2
+Y2K Baby Tee — Butterfly Print
+Wide-leg khaki trousers
+Brown leather belt
+Black combat boots
+The earthy tan trousers and rugged boots ground the pastel tee, leaning into a trendy mixed-aesthetic vibe.
+
+  Fit card: scored this cute little butterfly print y2k baby tee on depop for just $18 and i am obsessed. it looks so good paired with baggy jeans and chunky sneakers for that classic 2000s contrast. honestly such a steal for the rotation.
+
+2 model calls this session, 636 prompt + 165 output tokens
 ```
 
 **The three tools, tested one at a time**
