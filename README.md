@@ -101,10 +101,12 @@
   Each outfit names the wardrobe pieces it uses by their `name`, like
   "Baggy straight-leg jeans, dark wash".
 - **When it has nothing:** If `wardrobe["items"]` is empty, it returns general
-  styling advice for the item instead of naming owned pieces. If the model
-  sends back empty text, it returns a short message saying no outfit could be
-  suggested. It never returns `""` or None. If the model can't be reached, it
-  raises `ModelUnavailable`, which `run_agent` catches.
+  styling advice for the item instead of naming owned pieces. A `wardrobe` of
+  None is treated the same way. If the model sends back empty text, it returns
+  a short message saying no outfit could be suggested. It never returns `""`
+  or None. If the model can't be reached, it raises `ModelUnavailable`, which
+  `run_agent` catches. If `new_item` isn't a non-empty dict, it raises
+  `ValueError`, since there's nothing to style.
 
 ### `create_fit_card`
 
@@ -173,8 +175,24 @@ $ python -c "from tools import search_listings; print(search_listings('graphic t
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; ..."
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
+Outfit 1:
+- Vintage Levi's 501 Jeans — Medium Wash
+- White ribbed tank top
+- Vintage black denim jacket
+- Chunky white sneakers
+- Black crossbody bag
 
+Why it works: This classic denim-on-denim pairing leans into the vintage streetwear vibe, while the fitted top balances the relaxed jeans and sneakers.
+
+Outfit 2:
+- Vintage Levi's 501 Jeans — Medium Wash
+- Oversized grey crewneck sweatshirt
+- Black combat boots
+- Brown leather belt
+- Black crossbody bag
+
+Why it works: Tucking the medium wash denim into boots creates a grunge-inspired silhouette, contrasted by the cozy, oversized proportions of the grey crewneck.
 ```
 
 ```

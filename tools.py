@@ -139,6 +139,68 @@ def search_listings(
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
 
+_STYLIST_SYSTEM = (
+    "You are a stylist helping someone plan outfits around a thrifted find. "
+    "Be specific and brief. Write plain text with no markdown."
+)
+
+_NO_OUTFIT_MESSAGE = (
+    "No outfit could be suggested for this item right now. "
+    "Try running the same search again."
+)
+
+
+def _describe_item(item: dict) -> str:
+    """The listing fields an outfit depends on, as prompt lines.
+
+    Brand is left out on purpose: only 8 of the 40 listings have one.
+    """
+    return (
+        f"- Title: {item['title']}\n"
+        f"- Category: {item['category']}\n"
+        f"- Colors: {', '.join(item['colors'])}\n"
+        f"- Style: {', '.join(item['style_tags'])}"
+    )
+
+
+def _describe_wardrobe(items: list[dict]) -> str:
+    """One prompt line per wardrobe piece, led by its name."""
+    lines = []
+    for piece in items:
+        details = [
+            piece.get("category", ""),
+            f"colors: {', '.join(piece.get('colors') or [])}",
+            f"style: {', '.join(piece.get('style_tags') or [])}",
+        ]
+        if piece.get("notes"):
+            details.append(f"notes: {piece['notes']}")
+        lines.append(f"- {piece['name']} ({'; '.join(details)})")
+    return "\n".join(lines)
+
+
+def _owned_pieces_prompt(new_item: dict, items: list[dict]) -> str:
+    """Ask for outfits built from pieces the user already owns."""
+    return (
+        f"New thrifted item:\n{_describe_item(new_item)}\n\n"
+        f"The user's wardrobe:\n{_describe_wardrobe(items)}\n\n"
+        "Suggest one or two outfits that pair the new item with pieces from "
+        "this wardrobe. Name every wardrobe piece exactly as it is written "
+        "above, and add one sentence on why each outfit works. Keep it under "
+        "120 words."
+    )
+
+
+def _general_advice_prompt(new_item: dict) -> str:
+    """Ask for general styling ideas when the wardrobe is empty."""
+    return (
+        f"New thrifted item:\n{_describe_item(new_item)}\n\n"
+        "The user hasn't added any clothes to their wardrobe yet. Suggest one "
+        "or two outfits for this item, describing the kinds of pieces that go "
+        "with it (for example, 'light-wash straight-leg jeans'). Add one "
+        "sentence on why each outfit works. Keep it under 120 words."
+    )
+
+
 def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     """
     Given a thrifted item and the user's wardrobe, suggest one or two outfits.
@@ -157,18 +219,24 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         raising or returning "". Unit 4 has you trigger the empty wardrobe on
         purpose, so decide now what it should do.
 
-    TODO:
-        1. Check whether wardrobe['items'] is empty.
-        2. If it is, ask the model for general styling ideas for this item.
-        3. If it isn't, format the wardrobe items into the prompt and ask for
-           specific combinations naming pieces the user already owns.
-        4. Return the model's response.
+    Raises:
+        ValueError: if `new_item` is not a non-empty dict.
 
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not isinstance(new_item, dict) or not new_item:
+        raise ValueError("suggest_outfit needs a listing dict as new_item.")
+
+    # A missing wardrobe is treated the same as an empty one.
+    items = (wardrobe or {}).get("items") or []
+    if items:
+        prompt = _owned_pieces_prompt(new_item, items)
+    else:
+        prompt = _general_advice_prompt(new_item)
+
+    suggestion = generate(prompt, system=_STYLIST_SYSTEM)
+    return suggestion or _NO_OUTFIT_MESSAGE
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
