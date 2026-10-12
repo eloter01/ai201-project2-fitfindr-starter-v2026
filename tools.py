@@ -10,9 +10,6 @@ can't tell which layer is lying to you.
     suggest_outfit(new_item, wardrobe)             → str
     create_fit_card(outfit, new_item)              → str
 
-All three are stubs right now. They run and they do nothing — that's the
-starting position and it's deliberate.
-
 ⚠️ Before you write any of them, fill in the **Tool Inventory** section of your
 README (Milestone 2). Four lines per tool: what it does, each input with its
 type, exactly what it returns, and what it returns when it has nothing to give.
@@ -241,6 +238,39 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
 
+_CAPTION_SYSTEM = (
+    "You write short, casual captions people post about their thrift finds. "
+    "Sound like a real person, not a product listing. Write plain text with "
+    "no markdown and no hashtags."
+)
+
+_NO_OUTFIT_TO_CAPTION = (
+    "There's no outfit to write a fit card about yet. "
+    "Get an outfit suggestion for this item first."
+)
+
+_NO_CAPTION_MESSAGE = (
+    "The fit card couldn't be written this time. "
+    "Try running the same search again."
+)
+
+
+def _caption_prompt(outfit: str, new_item: dict) -> str:
+    """Ask for a 2-4 sentence caption naming item, price and platform once."""
+    price = f"${new_item['price']:g}"
+    return (
+        "The find:\n"
+        f"- Item: {new_item['title']}\n"
+        f"- Price: {price}\n"
+        f"- Platform: {new_item['platform']}\n\n"
+        f"How it will be styled:\n{outfit.strip()}\n\n"
+        "Write a caption for posting this find, 2 to 4 sentences long. "
+        "Mention the item, the price and the platform once each. Write the "
+        f"price with a dollar sign, like {price}. Say something specific "
+        "about the vibe of the outfit."
+    )
+
+
 def create_fit_card(outfit: str, new_item: dict) -> str:
     """
     Write a short caption someone would actually post about the find.
@@ -267,13 +297,17 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         • CACHE_ENABLED — the adapter handed back an answer it already had
         • TEMPERATURE   — at 0.0 the model gives the same words every time
 
-    TODO:
-        1. Guard against an empty or whitespace-only `outfit`.
-        2. Build a prompt with the item details and the outfit.
-        3. Call generate() and return the response.
+    Raises:
+        ValueError: if `new_item` is not a non-empty dict.
 
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not isinstance(new_item, dict) or not new_item:
+        raise ValueError("create_fit_card needs a listing dict as new_item.")
+    if not isinstance(outfit, str) or not outfit.strip():
+        return _NO_OUTFIT_TO_CAPTION
+
+    prompt = _caption_prompt(outfit, new_item)
+    caption = generate(prompt, system=_CAPTION_SYSTEM)
+    return caption or _NO_CAPTION_MESSAGE

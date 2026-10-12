@@ -118,11 +118,12 @@
 - **Returns:** A string with a casual caption of 2 to 4 sentences. It mentions
   the item, its price and its platform once each. The wording changes from run
   to run.
-- **When it has nothing:** If `outfit` is empty or only whitespace, it returns
-  a message saying there's no outfit to write about, without calling the
-  model. If the model sends back empty text, it returns a message saying the
-  caption couldn't be written. It doesn't raise in either case. If the model
-  can't be reached, it raises `ModelUnavailable`, which `run_agent` catches.
+- **When it has nothing:** If `outfit` is empty, only whitespace, or None, it
+  returns a message saying there's no outfit to write about, without calling
+  the model. If the model sends back empty text, it returns a message saying
+  the caption couldn't be written. It doesn't raise in either case. If the
+  model can't be reached, it raises `ModelUnavailable`, which `run_agent`
+  catches. If `new_item` isn't a non-empty dict, it raises `ValueError`.
 
 ---
 
@@ -196,8 +197,8 @@ Why it works: Tucking the medium wash denim into boots creates a grunge-inspired
 ```
 
 ```
-$ python -c "from tools import create_fit_card; ..."
-
+$ AI201_CACHE=0 python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
+Scored these vintage levis 501 jeans on depop for $38 and I am obsessed. The medium wash has that perfectly broken-in look without any of the work. Throwing them on with some fresh white sneakers for the ultimate effortlessly cool weekend fit.
 ```
 
 ---
