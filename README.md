@@ -322,19 +322,128 @@ Scored these vintage levis 501 jeans on depop for $38 and I am obsessed. The med
      `python run_eval.py --label before` runs everything and writes the table
      into results/. Paste it here and fill in the verdicts. -->
 
+Both runs were made by `run_eval.py::main` with the cache off. Rows 1 to 4
+come from `results/run_2026-10-18_2254_before.md`. Row 5 comes from
+`results/run_2026-10-18_2258_outage.md`. For that run I took my key, changed
+its last character, and passed it in as an environment variable for that one
+command, so `.env` itself was never edited. Only row 5 of the outage run
+counts.
+
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. A matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. An impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. The same item reaches every tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Repeat runs don't reuse an opening sentence | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. A model outage stops the run with a message instead of crashing | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
 **Real output from one try**, pasted as text, naming the file and function
 that produced it:
 
+**Criterion 1**, try 1, from `results/run_2026-10-18_2254_before.md`. The
+loop is `agent.py::run_agent`, and the fit card comes from
+`tools.py::create_fit_card`.
+
+```
+- stopped early: no
+- selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+- search_results: 10
+
+Fit card:
+Scored this adorable butterfly print Y2K baby tee on Depop for just $18. I am obsessed with how it looks dressed down with baggy dark wash denim and a vintage jacket for that ultimate early 2000s street style vibe. Honestly might just live in this top all summer.
 ```
 
+**Criterion 2**, try 1, from `results/run_2026-10-18_2254_before.md`. The
+branch is in `agent.py::run_agent`, and the message comes from
+`agent.py::_nothing_found_message`. The trace ends at the branch, with no
+`suggest_outfit` step.
+
+```
+- stopped early: yes — Nothing in the listings matched description 'designer ballgown', size XXS, under $5.
+Things to change: try broader words — 'jacket' finds more than 'cropped corduroy jacket'; drop the size, or try a neighbouring one; raise the price ceiling above $5.
+- selected_item: (none)
+- search_results: 0
+
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    0 match(es)
+[3] branch
+      →    search returned []: stopping before suggest_outfit
+```
+
+**Criterion 3**, try 1, from `results/run_2026-10-18_2254_before.md`. The
+session is filled in by `agent.py::run_agent`. The same title shows up as the
+first search result (step 2), as `selected_item`, and as the input to
+`suggest_outfit` (step 4) and `create_fit_card` (step 5).
+
+```
+- selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+      →    10 match(es)
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+[4] suggest_outfit
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Outfit 1: - Y2K Baby Tee — Butterfly Print - Baggy straight-leg jeans, dark wash - Vintage black denim jacket …
+      →    10 wardrobe item(s)
+[5] create_fit_card
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Scored this little butterfly print Y2K baby tee on depop for just $18 and I am obsessed. It looks so good pair…
+```
+
+**Criterion 4**, all five tries, from `results/run_2026-10-18_2254_before.md`
+(scenario "fit card openers don't repeat"). This criterion compares tries
+with each other, so one try isn't enough to show it. The cards come from
+`tools.py::create_fit_card`. No two share an opening sentence.
+
+```
+Try 1
+scored this y2k butterfly print baby tee on depop for just $18 and i am obsessed. it looks so good paired with wide-leg trousers and combat boots for that perfect mix of sweet and edgy. definitely my new go-to top for throwing together a quick fit.
+
+Try 2
+scored this y2k butterfly baby tee on depop for $18 and it's honestly the cutest piece ever. obsessed with how it looks dressed down with baggy dark denim and chunky sneakers for that ultimate 2000s street style. total nostalgia trip in the best way possible.
+
+Try 3
+Found this adorable butterfly print y2k baby tee on depop for $18 and I am obsessed. I can already picture it with baggy denim and chunky sneakers for the ultimate retro look. It also looks so cute tucked into khaki trousers with combat boots for that grungy, mixed-style vibe.
+
+Try 4
+scored this Y2K baby tee with the cutest butterfly print on depop for just $18. it looks so good with baggy dark jeans and chunky sneakers for that total throwback look. can also dress it down with khakis and combat boots when i want a little edge.
+
+Try 5
+Found this absolute dream of a butterfly print baby tee on Depop and I am obsessed. For only $18, it brings the ultimate Y2K energy whether I am pairing it with baggy denim or toughening it up with combat boots. Honestly such a steal for my rotation.
+```
+
+**Criterion 5**, try 1, from `results/run_2026-10-18_2258_outage.md`. The
+message comes from the `ModelUnavailable` handler in `agent.py::run_agent`,
+and the "What the service said" part comes from `generate.py::_explain`.
+
+```
+- stopped early: yes — The model couldn't be reached, so the outfit and caption steps didn't run. The search worked — 10 listing(s) were found. Check GEMINI_API_KEY in your .env, then run the same query again.
+What the service said: The model rejected your API key. Check GEMINI_API_KEY in your .env file, or create a fresh key at aistudio.google.com.
+- selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+- search_results: 10
+
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+      →    10 match(es)
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+[4] model unavailable
+      →    stopping, search results kept
 ```
 
 ---
