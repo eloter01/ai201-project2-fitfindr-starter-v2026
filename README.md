@@ -395,6 +395,88 @@ that produced it:
 
 ```
 
+**Failure modes, triggered on purpose**
+
+I triggered each failure once to check that the agent says what broke and
+what to try. None of them crashed, hung or went silent, so I didn't need to
+add a handler.
+
+1. **Empty search.** `python app.py ask 'designer ballgown size XXS under $5'`.
+   No listing is a ballgown. The branch in `agent.py::run_agent` stopped
+   after the search, so `suggest_outfit` never ran and no model calls were
+   made. The message names each filter I set and how to loosen it:
+
+   ```
+     Nothing in the listings matched description 'designer ballgown', size XXS, under $5.
+   Things to change: try broader words — 'jacket' finds more than 'cropped corduroy jacket'; drop the size, or try a neighbouring one; raise the price ceiling above $5.
+
+   0 model calls this session
+   ```
+
+2. **Empty wardrobe.**
+   `python app.py ask 'vintage graphic tee under $30' --empty-wardrobe`.
+   `tools.py::suggest_outfit` saw 0 wardrobe items and switched to a prompt
+   that asks for general styling ideas. It gave two outfits made from
+   clothes the user doesn't own yet, and the fit card still worked:
+
+   ```
+   (running with an empty wardrobe)
+   [1] parse_query
+         in:  vintage graphic tee under $30
+         out: dict with keys: description, size, max_price
+   [2] search_listings (via MCP)
+         in:  dict with keys: description, size, max_price
+         out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+         →    10 match(es)
+   [3] select_item
+         out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+   [4] suggest_outfit
+         in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+         out: Outfit one: pair the baby tee with low-rise light-wash cargo pants and chunky white platform sneakers. This wo…
+         →    0 wardrobe item(s)
+   [5] create_fit_card
+         in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+         out: Found this adorable butterfly print Y2K baby tee on depop for just $18. I am so obsessed with how it looks sty…
+
+     Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+     Outfit:   Outfit one: pair the baby tee with low-rise light-wash cargo pants and chunky white platform sneakers. This works because the baggy utility bottoms balance the cropped, fitted top for an authentic early-2000s silhouette. 
+
+   Outfit two: tuck the tee into a pink corduroy mini skirt and layer with knee-high white boots. This works because it leans into the sweet cottagecore crossover trend while keeping the color palette cohesive.
+
+     Fit card: Found this adorable butterfly print Y2K baby tee on depop for just $18. I am so obsessed with how it looks styled with low-rise cargo pants and chunky sneakers for that ultimate early-2000s baggy-meets-fitted silhouette. It also looks insanely cute tucked into a pink corduroy mini skirt with knee-high boots.
+
+   2 model calls this session, 351 prompt + 163 output tokens
+   ```
+
+3. **Model unavailable.** Instead of editing `.env`, I set a fake key for one
+   command only, with the cache off so the model really gets called:
+   `$env:GEMINI_API_KEY='not-a-real-key'; $env:AI201_CACHE='0'; python app.py ask 'black leather jacket under $60'`.
+   This works because `config.py` loads `.env` without overriding variables
+   that are already set. The service rejected the key on the first call in
+   `suggest_outfit`. `generate.py` turned that into `ModelUnavailable`, and
+   the handler in `agent.py::run_agent` caught it. There was no retry, no hang
+   and no stack trace, and the search results were kept:
+
+   ```
+   [1] parse_query
+         in:  black leather jacket under $60
+         out: dict with keys: description, size, max_price
+   [2] search_listings (via MCP)
+         in:  dict with keys: description, size, max_price
+         out: 10 items: Platform Mary Janes — Black Patent, Oversized Flannel Shirt — Plaid Red/Black, 90s Track Jacket — Navy/White Stripe … +7 more
+         →    10 match(es)
+   [3] select_item
+         out: Platform Mary Janes — Black Patent ($55.0, depop)
+   [4] model unavailable
+         →    stopping, search results kept
+
+     The model couldn't be reached, so the outfit and caption steps didn't run. The search worked — 10 listing(s) were found. Check GEMINI_API_KEY in your .env, then run the same query again.
+   What the service said: The model rejected your API key. Check GEMINI_API_KEY in your .env file, or create a fresh key at aistudio.google.com.
+
+   1 model calls this session
+   ```
+
 **On the MCP move:** <!-- what changed in your code, and whether anything
 behaved differently afterwards. If the rewire didn't work, say exactly where it
 broke — the error text and the last thing that worked. That earns the point in
