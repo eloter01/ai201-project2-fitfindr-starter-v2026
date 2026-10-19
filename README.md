@@ -385,14 +385,61 @@ that produced it:
 
 **Happy path**
 
-```
+`python app.py ask 'vintage graphic tee under $30' --trace`. Step 2 is the
+MCP call. The outfit and fit card came from the build cache (see the last
+line), since I had run this query before.
 
+```
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+      →    10 match(es)
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+[4] suggest_outfit
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Outfit One Pair the Y2K Baby Tee — Butterfly Print with the baggy straight-leg jeans, dark wash, vintage black…
+      →    10 wardrobe item(s)
+[5] create_fit_card
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: scored this little butterfly print y2k baby tee on depop for just $18 and i am obsessed. it looks so good tuck…
+
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   Outfit One
+Pair the Y2K Baby Tee — Butterfly Print with the baggy straight-leg jeans, dark wash, vintage black denim jacket, and chunky white sneakers. The fitted pink and purple butterfly graphic contrasts the dark indigo denim for a balanced streetwear look, while the chunky sneakers tie the Y2K vibe together.
+
+Outfit Two
+Pair the Y2K Baby Tee — Butterfly Print with the wide-leg khaki trousers, brown leather belt, and black combat boots. Tucking the pastel baby tee into the tan trousers grounds the pastel tones with earth colors, and the combat boots add an unexpected grunge edge to the cottagecore print.
+
+  Fit card: scored this little butterfly print y2k baby tee on depop for just $18 and i am obsessed. it looks so good tucked into baggy dark denim for that effortless streetwear vibe. honestly might live in this all summer.
+
+0 model calls this session, 2 served from cache
 ```
 
 **Empty search**
 
-```
+`python app.py ask 'designer ballgown size XXS under $5' --trace`. It stops
+at step 3, the branch, so it's two steps shorter than the happy path.
 
+```
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    0 match(es)
+[3] branch
+      →    search returned []: stopping before suggest_outfit
+
+  Nothing in the listings matched description 'designer ballgown', size XXS, under $5.
+Things to change: try broader words — 'jacket' finds more than 'cropped corduroy jacket'; drop the size, or try a neighbouring one; raise the price ceiling above $5.
+
+0 model calls this session
 ```
 
 **Failure modes, triggered on purpose**
