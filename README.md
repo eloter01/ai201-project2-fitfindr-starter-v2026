@@ -697,24 +697,114 @@ full. -->
 
      `python run_eval.py --label after` -->
 
-**What I changed:**
+**What I changed:** One prompt, in `tools.py::_caption_prompt` (commit
+`8c011f6`). I added one instruction to the fit card prompt:
 
-**Which failure it was meant to fix:**
+```python
+"Open with the outfit or its vibe, not with buying the item, and "
+"keep the price and the platform out of the first sentence. "
+```
+
+Everything else stayed the same: the system prompt, `suggest_outfit`, the
+search and the loop.
+
+**Which failure it was meant to fix:** The stock opener from the criterion 4
+part of my Diagnoses. Criterion 4 didn't miss, but in the before run 19 of 20
+tee cards opened with "scored this" or "found this", and all 20 named depop
+in the first sentence. My guess was that the prompt lists the item, price and
+platform at the top and asks for each one once, so the model packs all three
+into the opening and every card starts the same way. The change goes after
+that cause by keeping the price and platform out of the first sentence.
 
 ### Run Log — After
 
+Both runs were made by `run_eval.py::main` with the cache off, after the
+prompt change. Rows 1 to 4 come from `results/run_2026-10-18_2337_after.md`.
+Row 5 comes from `results/run_2026-10-18_2335_after_outage.md`, made the same
+way as the before outage run (my key with its last character changed, passed
+as an environment variable for that one command).
+
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. A matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. An impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. The same item reaches every tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Repeat runs don't reuse an opening sentence | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. A model outage stops the run with a message instead of crashing | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+
+**Real output** from the part that changed: the five criterion 4 cards from
+`tools.py::create_fit_card`, scenario "fit card openers don't repeat" in
+`results/run_2026-10-18_2337_after.md`. Rows 1, 2, 3 and 5 look the same as
+in the before run apart from the fit card wording. Their full output is in
+the results files.
+
+```
+Try 1
+Channeling major early 2000s energy with this outfit. I am obsessed with how the baggy denim balances out this little butterfly tee. Snagged it on depop for just $18 and it is officially my new personality.
+
+Try 2
+Total early 2000s pop princess energy with this baggy jeans and butterfly top combo. I scored this cute little tee on depop for just $18. The contrast between the tight feminine graphic and chunky sneakers is honestly unmatched.
+
+Try 3
+Straight out of 2004 with this butterfly print baby tee. I found it on depop for $18 and it balances the baggy dark denim perfectly. Giving major early 2000s mall goth energy.
+
+Try 4
+Channeling my inner early 2000s pop star with this baggy jeans and baby tee combo. Found this butterfly print top on depop for only $18 and it totally makes the whole outfit. The slouchy denim balances out the super fitted tee for that ultimate retro streetwear vibe.
+
+Try 5
+Going for that ultimate early 2000s streetwear vibe with these baggy dark wash jeans and chunky sneakers. This little butterfly tee ties the whole baggy denim look together so well. Snagged it on Depop for just $18 and I am obsessed.
+```
 
 **Did it help, and how do I know:**
 
 <!-- If it made things worse, say that. Honestly reported, that earns full
      credit and is more interesting than one that worked. -->
+
+Partly. It fixed what it was aimed at, but the model found a new stock
+opener.
+
+The run log can't show the difference. Every criterion was 5 of 5 before and
+after, because criterion 4 only fails on an exact match, and none of its five
+cards matched either time. So I ran the same counts on the 20 tee fit cards
+in each run (criteria 1, 3, 4 and 5 all use the same query). I counted with a
+short script that cuts out the opening sentence using criterion 4's rule.
+These counts aren't one of my five criteria. They're extra evidence.
+
+| Tee fit card openers (20 per run) | Before | After |
+|---|---|---|
+| Start with "scored this" or "found this" | 19 | 0 |
+| Name depop in the opening sentence | 20 | 0 |
+| Name $18 in the opening sentence | 19 | 0 |
+| End with "and i am obsessed" | 12 | 0 |
+| Exact repeat pairs | 1 | 0 |
+| Start with "channeling" | 0 | 11 |
+| Contain "early 2000s" | 0 | 15 |
+| Contain "energy" | 0 | 13 |
+| Contain "mall rat" | 0 | 7 |
+| Whole card has $18 / has depop / is 2 to 4 sentences | 20 / 20 / 20 | 20 / 20 / 20 |
+
+What the numbers show:
+
+- **The old template is gone.** No opener names the price or depop, none
+  starts with "scored this" or "found this", and there are no exact repeats.
+- **The model picked a new go-to opener.** 11 of 20 start with "channeling"
+  and 15 of 20 say "early 2000s". Two cards from different rows are almost
+  the same: "Channeling total early 2000s mall rat energy with this butterfly
+  print baby tee." (criterion 1, try 5) and "Channeling total early 2000s mall
+  rat energy with this butterfly baby tee." (criterion 3, try 5).
+- **The "found it on depop for $18" sentence didn't go away.** It moved to the
+  second or third sentence. 15 of 20 cards still say "scored" or "found"
+  somewhere.
+- **Nothing broke.** All 20 cards still have $18 and depop, and all 20 are 2
+  to 4 sentences, same as before.
+- **Same story on a different item.** The denim jacket (the empty wardrobe
+  diagnostic) went from 5 of 5 openers being "scored/found this ... on
+  poshmark for $42 and i am obsessed" to 2 of 5 starting with "channeling"
+  and 3 that vary.
+
+So the change removed the cause I diagnosed (price and platform in the first
+sentence), but not the bigger problem. The model falls back on one stock
+opener, and when I ruled one out, it picked another.
 
 
 
