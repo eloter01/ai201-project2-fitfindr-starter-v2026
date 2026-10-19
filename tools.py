@@ -256,8 +256,11 @@ _NO_CAPTION_MESSAGE = (
 
 
 def _caption_prompt(outfit: str, new_item: dict) -> str:
-    """Ask for a 2-4 sentence caption naming item, price and platform once."""
+    """Ask for a 2-4 sentence caption naming item, price and platform once,
+    with price and platform kept out of the opening sentence."""
     price = f"${new_item['price']:g}"
+    # Without the opener rule the model packs item, price and platform into
+    # the first sentence, so nearly every card opens "scored this X on Y for Z".
     return (
         "The find:\n"
         f"- Item: {new_item['title']}\n"
@@ -265,6 +268,8 @@ def _caption_prompt(outfit: str, new_item: dict) -> str:
         f"- Platform: {new_item['platform']}\n\n"
         f"How it will be styled:\n{outfit.strip()}\n\n"
         "Write a caption for posting this find, 2 to 4 sentences long. "
+        "Open with the outfit or its vibe, not with buying the item, and "
+        "keep the price and the platform out of the first sentence. "
         "Mention the item, the price and the platform once each. Write the "
         f"price with a dollar sign, like {price}. Say something specific "
         "about the vibe of the outfit."
