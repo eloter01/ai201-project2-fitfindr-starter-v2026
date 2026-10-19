@@ -835,7 +835,46 @@ opener, and when I ruled one out, it picked another.
      you did. "I ran out of time" is fine if it's true. Pretending nothing is
      left is not. -->
 
+No criterion is still missed. All five were met before and after the change.
+But I know of four things that are still wrong. Unit 4 allows only one
+improvement, so I stopped at the fit card prompt and left these for later.
 
+**1. The fit card has a new stock opener.** After my prompt change, 11 of 20
+tee cards start with "channeling", and most of those go on to "early 2000s
+... energy". Two openers from different rows differ only by the word "print". I
+told the model what not to open with, so it found a new habit instead of
+dropping the habit. Next I'd tell it what to open with instead, for example
+one specific piece from the outfit, so the opener depends on the outfit and
+changes when the outfit does. I stopped because the prompt change was my one
+improvement for this unit.
+
+**2. Criterion 4 can't catch a stock opener.** It runs one query five times,
+so similar openers are expected just because the input is the same. It also
+only fails on an exact match, so near-copies pass. That's why it said 5 of 5
+before and after, even though the openers changed a lot. Next time I'd test
+it on different items and decide what counts as the same opener, like the
+same first few words. I chose not to revise it in this unit, so the original
+stands.
+
+**3. Search ranks color and material above the item type.**
+`black leather jacket under $60` picks **Platform Mary Janes — Black Patent**
+($55). The only black leather jacket in the data, `90s Leather Bomber —
+Black`, costs $75, so the price filter removes it. Of what's left, the Mary
+Janes match two query words ("black", and "leather" from "Patent leather" in
+the description), while `90s Track Jacket — Navy/White Stripe` only matches
+"jacket". Every word counts the same in `tools.py::search_listings`, so the
+shoes win, and the agent goes on to style shoes for someone who asked for a
+jacket, with no warning. Next I'd give the word that names the item type more
+weight, or tell the user when no listing matches every word. I stopped because
+changing search would be a second improvement, and none of my criteria test
+ranking.
+
+**4. The MCP fallback is silent.** If the MCP call fails,
+`agent.py::_search` quietly uses the direct call, and the trace still says
+"search_listings (via MCP)". A broken server during a test run wouldn't show
+up anywhere. Next I'd add a note to the trace step when it falls back. I left
+it because the starter built it this way on purpose, so the agent keeps
+working while the MCP side is half-built.
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
