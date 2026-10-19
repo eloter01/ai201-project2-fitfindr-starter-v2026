@@ -686,7 +686,26 @@ behaved differently afterwards. If the rewire didn't work, say exactly where it
 broke — the error text and the last thing that worked. That earns the point in
 full. -->
 
+The only code I changed was `mcp_server.py` (commit `300dc8d`). I registered
+`search_listings` there with typed inputs (`description: str`,
+`size: str | None`, `max_price: float | None`) and a description written for
+someone who can't see my code, including what it returns when nothing
+matches. My agent didn't need to change, because `agent.py::_search` already
+calls `mcp_client.call_tool("search_listings", ...)`. Before the server had
+the tool, every search quietly fell back to the direct call.
 
+Nothing behaved differently. `python mcp_client.py` lists the tool with the
+right types. I then called the tool through MCP and directly on four queries
+(one with a price limit, one with a size that has matches, one with a size
+that has none, and the impossible ballgown query) and got the same list each
+time. Prices came back as floats and an empty `brand` came back as `None`, so
+nothing changed type on the way through.
+
+One thing to know: `_search` still falls back to the direct call without
+saying anything if MCP fails, and the trace step is named
+"search_listings (via MCP)" either way. So the trace label alone doesn't
+prove MCP ran. The proof is the `mcp_client.py` check, which I re-ran right
+before the traces above, and the side-by-side comparison.
 
 ---
 
