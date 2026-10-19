@@ -476,7 +476,55 @@ What the service said: The model rejected your API key. Check GEMINI_API_KEY in 
 
 **Diagnoses**
 
+No criterion missed, so there is no miss to diagnose. All five came out 5 of
+5. That doesn't mean all five targets were hard, so here's an honest look at
+each one.
 
+**Criteria 2, 3 and 5 couldn't really miss.** None of them depend on the
+model's randomness. Criterion 2 stops before any model call. Criterion 3 is
+plain code passing a dict through the session. Criterion 5 always hits the
+same `ModelUnavailable` handler. Once the code was right, 5 of 5 was the only
+possible result, so five tries told me the same thing one try would have.
+They work as checks that nothing broke, not as hard targets.
+
+**Criterion 1 was a bit loose, but its reason held up.** I allowed one miss
+in case the rate limiter ran out of retries. During this run the terminal
+showed the service push back twice with a 429 (empty wardrobe try 2 and
+criterion 5 try 2). Those lines print to the terminal, so they aren't in the
+results file. The retry in `generate.py::generate` handled both, so no run
+failed. Getting 5 of
+5 against a target of 4 means the target had room to spare.
+
+**Criterion 4 is the one I'd tighten.** It passed, but it measured the wrong
+thing. It only fails when two openers match exactly, and the model rarely
+writes a new opener. It mostly swaps a few words in the same one. Criteria 1,
+3, 4 and 5 all used the same query, so the before run has 20 fit cards for
+the same tee. Across those 20:
+
+- 11 openers start with "scored this", 8 with "found this", and 1 with
+  "finally scored".
+- 20 of 20 name depop and 19 of 20 name the $18 price in the opening
+  sentence.
+- 12 of 20 end with "and i am obsessed".
+- Tries 2 and 5 of the criterion 5 row had the exact same opener: "scored
+  this y2k butterfly baby tee on depop for $18 and i am obsessed". That row
+  isn't scored for criterion 4, but it shows a repeat can happen within five
+  tries.
+
+So try 1 ("scored this y2k butterfly print baby tee on depop for just $18 and
+i am obsessed") and try 3 ("Found this adorable butterfly print y2k baby tee
+on depop for $18 and I am obsessed") counted as different, even though they
+follow the same pattern and differ by only a few words. My reason for this
+criterion says a go-to opener is the failure I care about, and the check let
+it through.
+
+**Pattern and likely cause.** All of this is in one place: the model's output
+in `tools.py::create_fit_card`. My best guess at the mechanism is the prompt
+in `tools.py::_caption_prompt`. It lists the item, price and platform at the
+top and asks for each one once, so the model packs all three into the first
+sentence. That sentence comes out as "scored/found this [item] on [platform]
+for [price]" nearly every time. The tool works, but the prompt pushes every
+card toward the same opening.
 
 ---
 
