@@ -468,11 +468,11 @@ What the service said: The model rejected your API key. Check GEMINI_API_KEY in 
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | A matching query completes all three tools | 4 of 5 | MET (5/5) | I counted the tries that reached `create_fit_card` and came back with a fit card. All 5 did, with cards from 219 to 282 characters, and search never came back empty. 5 is at least 4. |
+| 2 | An impossible query stops before the second tool | 5 of 5 | MET (5/5) | In all 5 tries the trace ends at `[3] branch` with no `suggest_outfit` step, and the message says what to change for each filter I set (broader words, drop the size, raise the $5 ceiling). |
+| 3 | The same item reaches every tool | 5 of 5 | MET (5/5) | In each try I checked the title in four places: the first search result, `selected_item`, and the inputs to `suggest_outfit` and `create_fit_card`. All four said `Y2K Baby Tee — Butterfly Print` in all 5 tries. |
+| 4 | Repeat runs don't reuse an opening sentence | 5 of 5 | MET (5/5) | I cut out each card's opening sentence with the rule in `criteria.md`, made it lowercase, and removed emoji and punctuation. No two of the 5 matched, so every try passed. |
+| 5 | A model outage stops the run with a message instead of crashing | 5 of 5 | MET (5/5) | In the outage run (key one character off), all 5 tries show "stopped early" instead of "CRASHED", and each message says "The model rejected your API key." |
 
 **Diagnoses**
 
