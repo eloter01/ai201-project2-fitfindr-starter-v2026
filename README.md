@@ -304,6 +304,42 @@ Scored these vintage levis 501 jeans on depop for $38 and I am obsessed. The med
   to one query run 5 times, and criterion 3 to compare titles, which do show
   up in the trace.
 
+**Moment 3 (unit 4)**
+
+- *What I asked for:* After the before run, I asked Claude to lay out the
+  evidence for each try and suggest PASS or FAIL, so I could confirm the
+  marks myself. For criterion 4 it wrote a short throwaway script that cuts
+  out each fit card's opening sentence using the rule in my criterion.
+- *What came back:* All five criteria passed. But the script also looked at
+  the other tee cards in the same run, since four of my scenarios use the
+  same query. It found that tries 2 and 5 of the criterion 5 row, which isn't
+  scored for criterion 4, had the exact same opener, and that 19 of 20 tee
+  cards opened with "scored this" or "found this ... on depop for $18". It
+  pointed out that my exact-match check let these near-copies pass.
+- *What I changed:* I kept the PASS marks, since the criterion as written did
+  pass. In my Diagnoses I named criterion 4 as the one I'd tighten, and I
+  made the stock opener the target of my one improvement, the fit card
+  prompt.
+
+**Moment 4 (unit 4)**
+
+- *What I asked for:* Before making my improvement, I asked Claude whether
+  the spec says I have to revise a criterion. Then I asked whether criterion
+  4 was wrong, since running the same query five times should make similar
+  openers expected.
+- *What came back:* It quoted the spec: revising is optional, and it only
+  earns points when a criterion couldn't be measured or measured the wrong
+  thing. It agreed criterion 4 was partly wrong in two ways: the same query
+  makes similar openers expected, and the exact-match check lets near-copies
+  through. It pointed to a denim jacket card from the same run ("scored this
+  cute cropped light wash denim jacket on poshmark for only $42 and I am
+  already obsessed") as a sign the same opener shows up on different items
+  too. It also warned that a revised criterion using new items would need a
+  new before run before I changed the prompt.
+- *What I changed:* I decided not to revise criterion 4 and kept the original.
+  I wrote the problem up under What's Still Broken instead, as something I'd
+  test across different items next time.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
