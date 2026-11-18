@@ -5,6 +5,7 @@ Run your scenarios repeatedly and write the results down. ← UNIT 4
     python run_eval.py --label before      five tries, the default
     python run_eval.py --label after       after your improvement
     python run_eval.py --tries 10          more tries
+    python run_eval.py --capstone --tries 3 --label capstone_before
 
 This does the mechanical half of unit 4 for you. It runs every scenario in
 `scenarios.py` five separate times, **with caching off** so you get five real
@@ -65,38 +66,71 @@ def run_once(scenario, use_trace=True):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the scenarios and log the results.")
-    parser.add_argument("--tries", "--trials", type=int, default=5, dest="tries",
-                        help="tries per scenario (default 5, matching your criteria)")
+    parser.add_argument("--tries", "--trials", type=int, dest="tries",
+                        help="tries per scenario (default 5, or 3 in capstone mode)")
     parser.add_argument("--label", default="", help="a name for this run, e.g. 'before'")
+    parser.add_argument(
+        "--capstone", action="store_true", help="script Gemini responses offline"
+    )
+    parser.add_argument(
+        "--scenario", choices=scenario_module.CAPSTONE_SCENARIOS,
+        help="run and display one capstone scenario",
+    )
     args = parser.parse_args()
 
-    problems = scenario_module.validate()
+    if args.scenario and not args.capstone:
+        parser.error("--scenario requires --capstone")
+    if args.tries is None:
+        args.tries = 3 if args.capstone else 5
+    if args.tries < 1:
+        parser.error("--tries must be at least 1")
+
+    if args.capstone:
+        from capstone_eval import run_trial
+
+        capstone_scenarios = scenario_module.CAPSTONE_SCENARIOS
+        if args.scenario:
+            scenarios = [(args.scenario, capstone_scenarios[args.scenario])]
+        else:
+            scenarios = [
+                (key, scenario) for key, scenario in capstone_scenarios.items()
+                if scenario["criterion"] is not None
+            ]
+        print("Capstone mode: scripted Gemini HTTP responses, cache off, direct local search.")
+    else:
+        scenarios = [(None, scenario) for scenario in scenario_module.SCENARIOS]
+
+    problems = scenario_module.validate(scenario for _, scenario in scenarios)
     if problems:
         print("scenarios.py has problems:\n", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         sys.exit(1)
 
-    if not scenario_module.SCENARIOS:
+    if not scenarios:
         print("scenarios.py is empty. Milestone 3 starts by filling it in.", file=sys.stderr)
         sys.exit(1)
 
-    if args.tries < 5:
+    if not args.capstone and args.tries < 5:
         print(f"⚠️  {args.tries} tries. Your criteria are written out of five.\n")
 
-    # Caching off. Five tries have to be five real answers.
-    config.CACHE_ENABLED = False
-    print("Cache is OFF for this run — that's deliberate.\n")
+    if not args.capstone:
+        # Capstone runs disable the cache inside each worker subprocess.
+        config.CACHE_ENABLED = False
+        print("Cache is OFF for this run — that's deliberate.\n")
 
     rows = []
-    for scenario in scenario_module.SCENARIOS:
+    for scenario_id, scenario in scenarios:
         print(f"{scenario['name']}  ({scenario['wardrobe']} wardrobe)")
         print(f"  query: {scenario['query']}")
 
         tries = []
         for attempt in range(1, args.tries + 1):
-            record = run_once(scenario)
+            record = run_trial(scenario_id) if args.capstone else run_once(scenario)
             tries.append(record)
+
+            if args.scenario and record["stdout"]:
+                print(record["stdout"].rstrip())
 
             if record["crashed"]:
                 print(f"  try {attempt}: CRASHED — {record['crashed']}")
@@ -118,7 +152,8 @@ def write_report(rows, args):
     config.RESULTS_DIR.mkdir(exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     label = f"_{args.label}" if args.label else ""
-    path = config.RESULTS_DIR / f"run_{stamp}{label}.md"
+    prefix = "capstone_run" if args.capstone else "run"
+    path = config.RESULTS_DIR / f"{prefix}_{stamp}{label}.md"
 
     n = args.tries
     headers = " | ".join(f"Try {i}" for i in range(1, n + 1))
@@ -140,6 +175,13 @@ def write_report(rows, args):
         f"| Criterion | Target | {headers} | Verdict |",
         f"|---|---|{divider}|---|",
     ]
+
+    if args.capstone:
+        lines[4:4] = [
+            "- Provider: scripted Gemini HTTP responses through the SDK",
+            "- Search: direct local tool (the shared trace still labels it 'via MCP')",
+            "- CLI output: `app.py::_ask_one`",
+        ]
 
     for row in rows:
         scenario = row["scenario"]
@@ -180,6 +222,19 @@ def write_report(rows, args):
             lines.append(f"**Try {i}**")
             lines.append("")
 
+            if args.capstone:
+                lines.append(f"- Trial elapsed: {record['wall_seconds']:.6f} s")
+                for stage, attempts in record.get("attempts", {}).items():
+                    lines.append(f"- {stage} HTTP attempts: {attempts}")
+                for stage, seconds in record.get("stage_seconds", {}).items():
+                    lines.append(f"- {stage} elapsed: {seconds:.6f} s")
+                for stream in ("stdout", "stderr"):
+                    if record[stream]:
+                        lines += [
+                            "", f"CLI {stream}", "", "```", record[stream].rstrip(), "```",
+                        ]
+                lines.append("")
+
             if record["crashed"]:
                 lines += ["Crashed:", "", "```", record["crashed"], "```", ""]
                 continue
@@ -198,18 +253,19 @@ def write_report(rows, args):
                           str(session["outfit_suggestion"]), "```", ""]
             if session.get("fit_card"):
                 lines += ["Fit card:", "", "```", str(session["fit_card"]), "```", ""]
-            if record["trace"]:
+            if record.get("trace"):
                 lines += ["Trace:", "", "```", record["trace"], "```", ""]
 
     path.write_text("\n".join(lines), encoding="utf-8")
 
-    import generate
-
     print(f"Wrote {path.relative_to(config.ROOT)}")
-    print(generate.usage())
+    if not args.capstone:
+        import generate
+
+        print(generate.usage())
     print("\nCommit this file. It's the evidence the test actually happened.")
 
-    if not any(r["tries"][0]["trace"] for r in rows):
+    if not args.capstone and not any(r["tries"][0]["trace"] for r in rows):
         print(
             "\nNote: no trace was captured. You haven't added trace.step() calls\n"
             "to run_agent() yet — that's Milestone 2, and the trace is required\n"

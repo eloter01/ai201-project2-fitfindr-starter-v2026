@@ -61,11 +61,28 @@ SCENARIOS = [
 
 WARDROBES = ("example", "empty")
 
+CAPSTONE_SCENARIOS = {
+    slug: {
+        "name": name,
+        "query": "vintage graphic tee under $30",
+        "wardrobe": "example",
+        "criterion": criterion,
+    }
+    for slug, name, criterion in (
+        ("outfit-timeout", "stalled outfit response", 1),
+        ("retry-once", "outfit rate limit recovers", 2),
+        ("rate-limited", "outfit stays rate limited", 3),
+        ("blank-outfit", "blank outfit response", 4),
+        ("fit-card-failure", "fit card fails after the outfit succeeds", 5),
+        ("success", "scripted successful query", None),
+    )
+}
 
-def validate() -> list[str]:
+
+def validate(scenarios=SCENARIOS) -> list[str]:
     """Complain about anything malformed, before a long run rather than during."""
     problems = []
-    for i, scenario in enumerate(SCENARIOS, 1):
+    for i, scenario in enumerate(scenarios, 1):
         if not scenario.get("query", "").strip():
             problems.append(f"scenario {i} has no query")
         if scenario.get("wardrobe") not in WARDROBES:
