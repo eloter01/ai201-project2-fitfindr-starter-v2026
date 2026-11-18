@@ -36,6 +36,7 @@ import traceback
 
 import config
 import scenarios as scenario_module
+from run_log import write_run
 
 
 def run_once(scenario, use_trace=True):
@@ -120,13 +121,31 @@ def main():
         print("Cache is OFF for this run — that's deliberate.\n")
 
     rows = []
+    report_path = _report_path(args) if args.capstone else None
     for scenario_id, scenario in scenarios:
         print(f"{scenario['name']}  ({scenario['wardrobe']} wardrobe)")
         print(f"  query: {scenario['query']}")
 
         tries = []
         for attempt in range(1, args.tries + 1):
-            record = run_trial(scenario_id) if args.capstone else run_once(scenario)
+            if report_path is not None:
+                timestamp = dt.datetime.now(dt.timezone.utc)
+                record = run_trial(scenario_id)
+                write_run(
+                    report_path.with_suffix(".jsonl"),
+                    timestamp=timestamp,
+                    query=scenario["query"],
+                    provider="scripted",
+                    duration_seconds=record["wall_seconds"],
+                    session=record.get("session"),
+                    attempts=record.get("attempts"),
+                    stage_seconds=record.get("stage_seconds", {}),
+                    failed_stage=record.get("failed_stage"),
+                    failure=record["crashed"],
+                    scenario=scenario_id,
+                )
+            else:
+                record = run_once(scenario)
             tries.append(record)
 
             if args.scenario and record["stdout"]:
@@ -145,15 +164,20 @@ def main():
         rows.append({"scenario": scenario, "tries": tries})
         print()
 
-    write_report(rows, args)
+    write_report(rows, args, path=report_path)
 
 
-def write_report(rows, args):
-    config.RESULTS_DIR.mkdir(exist_ok=True)
-    stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
+def _report_path(args):
+    stamp_format = "%Y-%m-%d_%H%M%S_%f" if args.capstone else "%Y-%m-%d_%H%M"
+    stamp = dt.datetime.now().strftime(stamp_format)
     label = f"_{args.label}" if args.label else ""
     prefix = "capstone_run" if args.capstone else "run"
-    path = config.RESULTS_DIR / f"{prefix}_{stamp}{label}.md"
+    return config.RESULTS_DIR / f"{prefix}_{stamp}{label}.md"
+
+
+def write_report(rows, args, *, path=None):
+    path = path or _report_path(args)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     n = args.tries
     headers = " | ".join(f"Try {i}" for i in range(1, n + 1))
@@ -181,6 +205,7 @@ def write_report(rows, args):
             "- Provider: scripted Gemini HTTP responses through the SDK",
             "- Search: direct local tool (the shared trace still labels it 'via MCP')",
             "- CLI output: `app.py::_ask_one`",
+            f"- Structured records: `{path.with_suffix('.jsonl').name}`",
         ]
 
     for row in rows:

@@ -44,6 +44,54 @@ If it doesn't and you've made one honest attempt at the error, post the
 
 ---
 
+## Capstone | Local with logs
+
+From the repository root, with the virtual environment active, start FitFindr
+with one command.
+
+```sh
+python app.py ask
+```
+
+Try `vintage graphic tee under $30` at the prompt. Press Enter on an empty line
+to quit. Live model requests use `GEMINI_API_KEY` in `.env`. FitFindr uses a
+hosted Gemini model, so there are no local model files to download.
+
+Use Python 3.11–3.13 and the dependency ranges in `requirements.txt`. The
+development environment uses Python 3.12.3 with `python-dotenv` 1.1.1,
+`google-genai` 1.75.0, `mcp` 1.30.0, Flask 3.1.3, and Gunicorn 23.0.0. The
+scripted demo uses `httpx` 0.28.1 from the installed dependencies.
+
+### Offline demo and evaluation
+
+These commands use scripted Gemini HTTP responses and local search. They run
+without a Gemini key and print the same result view as `app.py ask`.
+
+```sh
+python run_eval.py --capstone --scenario retry-once --tries 1 --label demo-retry
+python run_eval.py --capstone --scenario fit-card-failure --tries 1 --label demo-fit-card
+python run_eval.py --capstone --tries 3 --label capstone_before
+```
+
+The first demo recovers from one `429` and shows a fit card. The second shows
+the listing and outfit alongside the fit-card error. The third runs all five
+scored scenarios three times each.
+
+Each live CLI query appends a JSON Lines record to `results/fitfindr_runs.jsonl`.
+Git ignores this local file because it includes query and result text. Each
+capstone evaluation creates a named `.jsonl` and matching `.md` report in
+`results/`. The evaluation parent writes one record per trial, including a
+trial that hits its process cutoff. Those paired files can be committed as
+course evidence.
+
+Records include the UTC start time, query, completed results, error, elapsed
+seconds, outcome, failed model stage, and per-stage timings and attempts.
+CLI counts come from the adapter. The scripted harness counts HTTP requests
+in its transport and includes worker startup in the total elapsed time. A
+worker killed at the cutoff reports unknown attempt counts as `null`.
+
+---
+
 ## Your first five minutes
 
 Start with the data. Your tools will only be as good as your understanding of
@@ -62,9 +110,8 @@ python app.py ask 'vintage graphic tee under $30'
 > and substitutes nothing. You get results with no price ceiling and no error
 > saying so. Single quotes are literal in PowerShell, bash and zsh alike.
 
-That last one runs the loop. All three tools are stubs, so it will tell you the
-loop isn't built yet. **That's the correct starting position** — it runs, and it
-does nothing.
+That last command runs the agent and displays the selected listing, any
+completed model results, and an explanation if the run stops early.
 
 ---
 

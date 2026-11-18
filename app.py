@@ -18,9 +18,12 @@ telling you why. Single quotes are literal in PowerShell, bash and zsh alike.
 """
 
 import argparse
+from datetime import datetime, timezone
 import sys
+import time
 
 import config
+from run_log import write_run
 
 # Every query here except the last one has something real to find in
 # data/listings.json. If you add your own, check it against the data first — a
@@ -125,24 +128,54 @@ def show_session(session: dict) -> None:
         print()
 
 
-def _ask_one(query, wardrobe, use_trace):
+def _ask_one(query, wardrobe, use_trace, *, log_run=True):
     from agent import run_agent
     import trace as trace_module
 
-    if use_trace:
-        trace_module.start_trace()
+    timestamp = datetime.now(timezone.utc)
+    started = time.monotonic()
+    metrics = {} if log_run else None
+    session = None
+    failure = None
+    try:
+        if use_trace:
+            trace_module.start_trace()
 
-    session = run_agent(query, wardrobe)
-    show_session(session)
+        session = run_agent(query, wardrobe, model_metrics=metrics)
+        show_session(session)
 
-    if use_trace:
-        text = trace_module.get_trace()
-        if not text:
-            print(
-                "  (--trace printed nothing. You haven't added trace.step() calls to\n"
-                "   run_agent() yet — that's unit 4, Milestone 2.)\n"
+        if use_trace and not trace_module.get_trace():
+            print("  No agent steps were recorded.\n")
+        return session
+    except KeyboardInterrupt:
+        failure = "Query interrupted."
+        raise
+    except Exception as exc:  # noqa: BLE001 — record the error before CLI handling
+        failure = f"Unexpected query error ({type(exc).__name__})."
+        raise
+    finally:
+        if metrics is not None:
+            write_run(
+                config.RESULTS_DIR / "fitfindr_runs.jsonl",
+                timestamp=timestamp,
+                query=query,
+                provider="live",
+                duration_seconds=time.monotonic() - started,
+                session=session,
+                attempts={
+                    stage: metrics.get(stage, {}).get("attempts", 0)
+                    for stage in ("outfit", "fit_card")
+                },
+                stage_seconds={
+                    stage: measured["duration_seconds"]
+                    for stage, measured in metrics.items()
+                },
+                failed_stage=next(
+                    (stage for stage, measured in metrics.items() if measured["failed"]),
+                    None,
+                ),
+                failure=failure,
             )
-    return session
 
 
 def cmd_ask(args):

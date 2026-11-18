@@ -73,14 +73,18 @@ def _run_worker(scenario_id: str) -> dict:
     attempts = {"outfit": 0, "fit_card": 0}
     stage_seconds = {}
     stage = ""
+    failed_stage = None
 
     def measure(name, tool):
         def call(*args):
-            nonlocal stage
+            nonlocal stage, failed_stage
             stage = name
             started = time.monotonic()
             try:
                 return tool(*args)
+            except Exception:
+                failed_stage = name
+                raise
             finally:
                 stage_seconds[name] = time.monotonic() - started
 
@@ -140,15 +144,19 @@ def _run_worker(scenario_id: str) -> dict:
     ):
         try:
             query = CAPSTONE_SCENARIOS[scenario_id]["query"]
-            session = app._ask_one(query, get_example_wardrobe(), use_trace=True)
+            # The parent records the trial, even if this worker is killed.
+            session = app._ask_one(
+                query, get_example_wardrobe(), use_trace=True, log_run=False
+            )
         except Exception as exc:  # noqa: BLE001 — a crashed trial is evidence
-            crashed = f"{type(exc).__name__}: {exc}"
+            crashed = f"Unexpected query error ({type(exc).__name__})."
 
     return {
         "session": session,
         "crashed": crashed,
         "attempts": attempts,
         "stage_seconds": stage_seconds,
+        "failed_stage": failed_stage,
     }
 
 

@@ -15,6 +15,9 @@ env/
 # Cached model responses
 .cache/
 
+# Routine CLI queries stay local. Named capstone evidence stays trackable.
+/results/fitfindr_runs.jsonl
+
 # OS noise
 .DS_Store
 Thumbs.db

@@ -1,9 +1,11 @@
+from contextlib import contextmanager
 import re
+import time
 
 import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card
-from generate import ModelUnavailable
+from generate import ModelUnavailable, call_count
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -108,7 +110,27 @@ def _search(parsed: dict) -> list[dict]:
         )
 
 
-def run_agent(query: str, wardrobe: dict) -> dict:
+@contextmanager
+def _measure_model_stage(metrics: dict | None, stage: str):
+    if metrics is None:
+        yield
+        return
+
+    started = time.monotonic()
+    calls_before = call_count()
+    failed = True
+    try:
+        yield
+        failed = False
+    finally:
+        metrics[stage] = {
+            "attempts": call_count() - calls_before,
+            "duration_seconds": time.monotonic() - started,
+            "failed": failed,
+        }
+
+
+def run_agent(query: str, wardrobe: dict, *, model_metrics: dict | None = None) -> dict:
     """
     Run the loop once and return the finished session.
 
@@ -117,6 +139,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                   (e.g. "vintage graphic tee under $30, size M").
         wardrobe: a wardrobe dict — get_example_wardrobe() or
                   get_empty_wardrobe() from utils/data_loader.py.
+        model_metrics: when supplied, receives timing and attempt counts for
+                       model stages, including stages that fail.
 
     Returns:
         The session dict. An error means the run ended early. Completed fields
@@ -164,9 +188,10 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     try:
         steps += 1
         trace.check_iterations(steps)
-        session["outfit_suggestion"] = suggest_outfit(
-            session["selected_item"], session["wardrobe"]
-        )
+        with _measure_model_stage(model_metrics, stage):
+            session["outfit_suggestion"] = suggest_outfit(
+                session["selected_item"], session["wardrobe"]
+            )
         trace.step(
             "suggest_outfit",
             inputs=session["selected_item"],
@@ -177,9 +202,10 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         stage = "fit_card"
         steps += 1
         trace.check_iterations(steps)
-        session["fit_card"] = create_fit_card(
-            session["outfit_suggestion"], session["selected_item"]
-        )
+        with _measure_model_stage(model_metrics, stage):
+            session["fit_card"] = create_fit_card(
+                session["outfit_suggestion"], session["selected_item"]
+            )
         trace.step(
             "create_fit_card",
             inputs=session["selected_item"],

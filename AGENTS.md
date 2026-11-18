@@ -52,6 +52,10 @@ starter notes predate the implemented tools and MCP registration.
 - `trace.py` records the loop steps and enforces the iteration cap. It uses
   process-level state and prints steps to the console. The CLI's `--trace`
   path and the evaluation harness reset the trace before a run.
+- `run_log.py` writes JSON Lines records for local CLI queries and capstone
+  trials. The CLI appends to an ignored local file. The evaluation parent
+  writes a named evidence file alongside each capstone report and records
+  workers that fail or time out.
 - `serve.py` exposes `GET /health` and `POST /ask`. The latter accepts JSON
   with a `query` and an optional `wardrobe` dict, and returns the session.
   The server serializes agent runs within a process. Use the default sync
