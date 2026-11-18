@@ -53,6 +53,7 @@ _client = None
 _budget_warned = False
 
 _MODEL_TIMEOUT_MESSAGE = "The model request timed out. Try again."
+_GEMINI_SERVER_TIMEOUT_SECONDS = 10
 
 
 class QuotaGuard(Exception):
@@ -340,7 +341,12 @@ def generate(
 
         call_config = {
             "temperature": temperature,
-            "http_options": {"timeout": min(config.MODEL_REQUEST_TIMEOUT_MS, remaining_ms)},
+            "http_options": {
+                "timeout": min(config.MODEL_REQUEST_TIMEOUT_MS, remaining_ms),
+                # The SDK copies the client timeout into this header by default.
+                # Gemini rejects server deadlines below ten seconds.
+                "headers": {"X-Server-Timeout": str(_GEMINI_SERVER_TIMEOUT_SECONDS)},
+            },
         }
         if system:
             call_config["system_instruction"] = system

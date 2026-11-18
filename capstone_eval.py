@@ -95,6 +95,13 @@ def _run_worker(scenario_id: str) -> dict:
 
     def respond(request: httpx.Request) -> httpx.Response:
         attempts[stage] += 1
+        server_timeout = request.headers.get("X-Server-Timeout")
+        if server_timeout is not None and float(server_timeout) < 10:
+            return httpx.Response(400, json={"error": {
+                "code": 400,
+                "status": "INVALID_ARGUMENT",
+                "message": "Minimum allowed server deadline is 10s.",
+            }})
         if stage == "outfit":
             if scenario_id == "outfit-timeout":
                 # MockTransport does not enforce socket timeouts itself. Use
