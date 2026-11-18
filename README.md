@@ -103,13 +103,10 @@ and tells you what to change in your search.
 - **Returns:** A non-empty string with one or two outfit ideas in plain text.
   Each outfit names the wardrobe pieces it uses by their `name`, like
   "Baggy straight-leg jeans, dark wash".
-- **When it has nothing:** If `wardrobe["items"]` is empty, it returns general
-  styling advice for the item instead of naming owned pieces. A `wardrobe` of
-  None is treated the same way. If the model sends back empty text, it returns
-  a short message saying no outfit could be suggested. It never returns `""`
-  or None. If the model can't be reached, it raises `ModelUnavailable`, which
-  `run_agent` catches. If `new_item` isn't a non-empty dict, it raises
-  `ValueError`, since there's nothing to style.
+- **When it has nothing:** An empty or missing wardrobe gets general styling
+  advice. If the model request fails or returns blank text, the tool raises
+  `ModelUnavailable`. The agent keeps the listing and skips fit-card
+  generation. A missing or empty listing raises `ValueError`.
 
 ### `create_fit_card`
 
@@ -122,11 +119,10 @@ and tells you what to change in your search.
   the item, its price and its platform once each. The wording changes from run
   to run.
 - **When it has nothing:** If `outfit` is empty, only whitespace, or None, it
-  returns a message saying there's no outfit to write about, without calling
-  the model. If the model sends back empty text, it returns a message saying
-  the caption couldn't be written. It doesn't raise in either case. If the
-  model can't be reached, it raises `ModelUnavailable`, which `run_agent`
-  catches. If `new_item` isn't a non-empty dict, it raises `ValueError`.
+  returns a message saying there's no outfit to write about and skips the
+  model call. If the model request fails or returns blank text, the tool
+  raises `ModelUnavailable`. The agent keeps the listing and outfit. A missing
+  or empty listing raises `ValueError`.
 
 ---
 
@@ -173,8 +169,9 @@ session, and the next step reads its input back out of it:
 6. `fit_card`: what `create_fit_card` returned for `outfit_suggestion` and
    `selected_item`.
 
-If the run stops early (an empty search, or the model can't be reached),
-`error` gets a message and the fields after that point stay None.
+When the run stops early, `error` holds the message and earlier results stay
+in the session. For a model failure, `failed_stage` identifies `outfit` or
+`fit_card`. The CLI displays the completed results and the message.
 
 ---
 

@@ -141,11 +141,6 @@ _STYLIST_SYSTEM = (
     "Be specific and brief. Write plain text with no markdown."
 )
 
-_NO_OUTFIT_MESSAGE = (
-    "No outfit could be suggested for this item right now. "
-    "Try running the same search again."
-)
-
 
 def _describe_item(item: dict) -> str:
     """The listing fields an outfit depends on, as prompt lines.
@@ -218,6 +213,7 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 
     Raises:
         ValueError: if `new_item` is not a non-empty dict.
+        ModelUnavailable: if the model request fails or returns blank text.
 
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
@@ -232,8 +228,7 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     else:
         prompt = _general_advice_prompt(new_item)
 
-    suggestion = generate(prompt, system=_STYLIST_SYSTEM)
-    return suggestion or _NO_OUTFIT_MESSAGE
+    return generate(prompt, system=_STYLIST_SYSTEM)
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -248,12 +243,6 @@ _NO_OUTFIT_TO_CAPTION = (
     "There's no outfit to write a fit card about yet. "
     "Get an outfit suggestion for this item first."
 )
-
-_NO_CAPTION_MESSAGE = (
-    "The fit card couldn't be written this time. "
-    "Try running the same search again."
-)
-
 
 def _caption_prompt(outfit: str, new_item: dict) -> str:
     """Ask for a 2-4 sentence caption naming item, price and platform once,
@@ -304,6 +293,7 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
 
     Raises:
         ValueError: if `new_item` is not a non-empty dict.
+        ModelUnavailable: if the model request fails or returns blank text.
 
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
@@ -314,5 +304,4 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         return _NO_OUTFIT_TO_CAPTION
 
     prompt = _caption_prompt(outfit, new_item)
-    caption = generate(prompt, system=_CAPTION_SYSTEM)
-    return caption or _NO_CAPTION_MESSAGE
+    return generate(prompt, system=_CAPTION_SYSTEM)

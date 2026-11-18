@@ -104,6 +104,27 @@ def cmd_examples(args):
     )
 
 
+def show_session(session: dict) -> None:
+    """Display the results the agent completed and any reason it stopped."""
+    print()
+    item = session["selected_item"]
+    if item:
+        print(
+            f"  Found:    {item.get('title')} — ${item.get('price')} "
+            f"on {item.get('platform')}"
+        )
+        print()
+    if session["outfit_suggestion"]:
+        print(f"  Outfit:   {session['outfit_suggestion']}")
+        print()
+    if session["fit_card"]:
+        print(f"  Fit card: {session['fit_card']}")
+        print()
+    if session["error"]:
+        print(f"  {session['error']}")
+        print()
+
+
 def _ask_one(query, wardrobe, use_trace):
     from agent import run_agent
     import trace as trace_module
@@ -112,18 +133,7 @@ def _ask_one(query, wardrobe, use_trace):
         trace_module.start_trace()
 
     session = run_agent(query, wardrobe)
-
-    print()
-    if session["error"]:
-        print(f"  {session['error']}")
-    else:
-        item = session["selected_item"] or {}
-        print(f"  Found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
-        print()
-        print(f"  Outfit:   {session['outfit_suggestion']}")
-        print()
-        print(f"  Fit card: {session['fit_card']}")
-    print()
+    show_session(session)
 
     if use_trace:
         text = trace_module.get_trace()

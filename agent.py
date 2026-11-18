@@ -29,6 +29,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
         "error": None,               # set when the run ended early
+        "failed_stage": None,        # outfit or fit_card for model failures
     }
 
 
@@ -118,8 +119,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                   get_empty_wardrobe() from utils/data_loader.py.
 
     Returns:
-        The session dict. **Check session["error"] first** — if it isn't None,
-        the run ended early and the later fields will still be None.
+        The session dict. An error means the run ended early. Completed fields
+        are still available, and failed_stage identifies a failed model step.
 
     The branch rule, stated once so the code below can be read against it:
 
@@ -129,43 +130,38 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         result, put it in session["selected_item"], and continue.
     """
     session = new_session(query, wardrobe)
-    steps = 0
+    steps = 1
+    trace.check_iterations(steps)
+    parsed = parse_query(query)
+    session["parsed"] = parsed
+    trace.step("parse_query", inputs=query, returned=parsed)
 
-    # ⚠️ UNIT 4, MILESTONE 2 — everything in the try/except is unit 3 code; the
-    # handler around it is what unit 4 adds, so that a bad key produces a
-    # sentence rather than a stack trace.
-    try:
-        steps += 1
-        trace.check_iterations(steps)
-        parsed = parse_query(query)
-        session["parsed"] = parsed
-        trace.step("parse_query", inputs=query, returned=parsed)
+    steps += 1
+    trace.check_iterations(steps)
+    results = _search(parsed)
+    session["search_results"] = results
+    trace.step(
+        "search_listings (via MCP)",
+        inputs=parsed,
+        returned=results,
+        note=f"{len(results)} match(es)",
+    )
 
-        steps += 1
-        trace.check_iterations(steps)
-        results = _search(parsed)
-        session["search_results"] = results
+    if not results:
+        session["error"] = _nothing_found_message(parsed)
         trace.step(
-            "search_listings (via MCP)",
-            inputs=parsed,
-            returned=results,
-            note=f"{len(results)} match(es)",
+            "branch",
+            note="search returned []: stopping before suggest_outfit",
         )
+        return session
 
-        # ── THE BRANCH ────────────────────────────────────────────────────────
-        if not results:
-            session["error"] = _nothing_found_message(parsed)
-            trace.step(
-                "branch",
-                note="search returned []: stopping before suggest_outfit",
-            )
-            return session
+    steps += 1
+    trace.check_iterations(steps)
+    session["selected_item"] = results[0]
+    trace.step("select_item", returned=session["selected_item"])
 
-        steps += 1
-        trace.check_iterations(steps)
-        session["selected_item"] = results[0]
-        trace.step("select_item", returned=session["selected_item"])
-
+    stage = "outfit"
+    try:
         steps += 1
         trace.check_iterations(steps)
         session["outfit_suggestion"] = suggest_outfit(
@@ -178,6 +174,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             note=f"{len(session['wardrobe'].get('items') or [])} wardrobe item(s)",
         )
 
+        stage = "fit_card"
         steps += 1
         trace.check_iterations(steps)
         session["fit_card"] = create_fit_card(
@@ -190,14 +187,10 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         )
 
     except ModelUnavailable as exc:
-        session["error"] = (
-            f"The model couldn't be reached, so the outfit and caption steps "
-            f"didn't run. The search worked — "
-            f"{len(session['search_results'])} listing(s) were found. "
-            f"Check GEMINI_API_KEY in your .env, then run the same query "
-            f"again.\nWhat the service said: {exc}"
-        )
-        trace.step("model unavailable", note="stopping, search results kept")
+        session["failed_stage"] = stage
+        label = "Outfit" if stage == "outfit" else "Fit card"
+        session["error"] = f"{label} unavailable. {exc}"
+        trace.step("model unavailable", note=f"stopping at {stage}, earlier results kept")
 
     return session
 
@@ -230,29 +223,18 @@ def _nothing_found_message(parsed: dict) -> str:
 
 # ── running it directly ───────────────────────────────────────────────────────
 
-def _show(session: dict) -> None:
-    if session["error"]:
-        print(f"  stopped: {session['error']}")
-        print(f"  fit_card is {session['fit_card']!r} — it should still be None here")
-        return
-
-    item = session["selected_item"] or {}
-    print(f"  found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
-    print(f"  outfit:   {session['outfit_suggestion']}")
-    print(f"  fit card: {session['fit_card']}")
-
-
 if __name__ == "__main__":
+    from app import show_session
     from utils.data_loader import get_example_wardrobe
 
     print("=== A query the data can match ===")
-    _show(run_agent(
+    show_session(run_agent(
         query="looking for a vintage graphic tee under $30",
         wardrobe=get_example_wardrobe(),
     ))
 
     print("\n=== A query it can't ===")
-    _show(run_agent(
+    show_session(run_agent(
         query="designer ballgown size XXS under $5",
         wardrobe=get_example_wardrobe(),
     ))

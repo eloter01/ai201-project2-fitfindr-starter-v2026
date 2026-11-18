@@ -85,9 +85,10 @@ def _cache_read(key: str) -> str | None:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))["response"]
+        text = json.loads(path.read_text(encoding="utf-8"))["response"]
     except Exception:
         return None
+    return text if isinstance(text, str) and text.strip() else None
 
 
 def _cache_write(key: str, response: str) -> None:
@@ -282,7 +283,7 @@ def generate(
     temperature: float | None = None,
 ) -> str:
     """
-    Send a prompt and get text back.
+    Send a prompt and return non-empty text, or raise ModelUnavailable.
 
     Args:
         prompt: what you're asking.
@@ -371,6 +372,10 @@ def generate(
         if time.monotonic() >= deadline:
             raise ModelTimeout(_MODEL_TIMEOUT_MESSAGE)
         text = (response.text or "").strip()
+        if not text:
+            raise ModelUnavailable(
+                "The model returned no text. Try running the same search again."
+            )
         if use_cache:
             _cache_write(key, text)
         return text

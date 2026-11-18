@@ -18,8 +18,9 @@ starter notes predate the implemented tools and MCP registration.
 - The session dict is the source of truth. Write each stage's output into it
   and use that stored output for the next stage. Callers check `session["error"]`.
   An empty search sets an actionable message based on the supplied filters and
-  stops before either model tool runs. The agent catches `ModelUnavailable`
-  and retains search results and any other work already in the session.
+  stops before either model tool runs. The agent catches `ModelUnavailable`,
+  sets `failed_stage` (`outfit` or `fit_card`), and keeps the results already
+  in the session. The CLI displays those results alongside the error.
 - `tools.py` holds the tool implementations. Search is deterministic and local.
   It applies optional size and inclusive price filters, ranks by shared
   keywords with stable ties, and returns up to `config.SEARCH_RESULT_LIMIT`
@@ -27,9 +28,9 @@ starter notes predate the implemented tools and MCP registration.
   separated by `/`, strips parentheticals, and lets One Size pass any filter.
 - `suggest_outfit` uses the wardrobe when it has items and asks for general
   styling advice when it is empty. `create_fit_card` uses the outfit and the
-  same listing. Both tools reject a missing or empty listing dict and return
-  fallback strings when Gemini sends blank text. The fit-card tool skips its
-  model call when given blank outfit input.
+  same listing. Both tools reject a missing or empty listing dict. A blank
+  Gemini response raises `ModelUnavailable`. The fit-card tool returns a
+  message and skips its model call when given blank outfit input directly.
 - `utils/data_loader.py` is the shared access point for `data/listings.json`
   and `data/wardrobe_schema.json`. Use its wardrobe helpers to strip note
   keys and get the common `{"items": [...]}` shape. Listing `brand` and
