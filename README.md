@@ -949,11 +949,11 @@ working while the MCP side is half-built.
 
 ### The Shape
 
-**B. Harden against failure.** FitFindr will keep showing the selected listing
-when Gemini cannot suggest an outfit. If Gemini suggests an outfit but cannot
-write the fit card, the CLI will show both the listing and the outfit. The
-extension will bound waits and retries, handle blank model responses, and record
-what happened in a local run log. Scripted failures will make the demo repeatable.
+**B. Harden against failure.** FitFindr shows the selected listing when
+Gemini cannot suggest an outfit. If Gemini suggests an outfit but cannot write
+the fit card, the CLI shows both the listing and the outfit. The extension
+bounds waits and retries, handles blank model responses, and records what
+happened in a local run log. Scripted failures make the demo repeatable.
 
 Search ranking, wardrobe validation, and Flask deployment are outside the scope
 of this capstone.
@@ -1037,11 +1037,11 @@ printed this line from `app.py::show_session`.
 
 `generate.py::generate` used the 75-second delay to decide to stop, then
 discarded it when building the user message. Following the message would send
-the user back 15 seconds early. The improvement will carry the provider's
-delay into the message. I would require that diagnostic to show a wait of at
+the user back 15 seconds early. I chose to carry the provider's delay into
+the message. I would require that diagnostic to show a wait of at
 least 75 seconds while still stopping after one attempt and showing the
-listing. The five scored criteria and fixtures will stay the same for the
-comparison.
+listing. The before-and-after comparison used the same five scored criteria
+and fixtures.
 
 ### Retry guidance improvement
 
@@ -1099,6 +1099,75 @@ after the improvement, produced by the same CLI renderer and report writer.
   Outfit:   Pair the tee with straight-leg jeans and white sneakers.
   Fit card unavailable. The model request failed (HTTP 400). Try again.
 ```
+
+### Instrumentation
+
+The CLI appends one JSONL record per query. The capstone evaluator saves a
+separate JSONL file and matching CLI report for each run. The records include
+the query, completed output, error, timings, outcome, and model attempts by
+stage. I verified the launch command, a no-match query, both offline demos,
+and the 75-second retry diagnostic from a clean Windows checkout of `c00fd34`
+with Python 3.12.3.
+
+These ten entries are from the after run, followed by the separate
+`Retry-After: 75` failure. They were written by `run_log.py::write_run`.
+
+```jsonl
+{"timestamp": "2026-11-18T03:52:15.381467+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. The model request timed out. Try again.", "duration_seconds": 8.98399999999674, "stage_seconds": {"outfit": 6.561999999976251}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 1, "fit_card": 0}, "provider": "scripted", "scenario": "outfit-timeout"}
+{"timestamp": "2026-11-18T03:52:24.378926+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. The model request timed out. Try again.", "duration_seconds": 8.672000000020489, "stage_seconds": {"outfit": 6.375}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 1, "fit_card": 0}, "provider": "scripted", "scenario": "outfit-timeout"}
+{"timestamp": "2026-11-18T03:52:41.894774+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": "Pair the tee with straight-leg jeans and white sneakers.", "fit_card": "Straight-leg jeans and sneakers keep it casual. The tee was $18 on depop."}, "error": null, "duration_seconds": 2.60999999998603, "stage_seconds": {"outfit": 0.46799999999348074, "fit_card": 0.0}, "outcome": "completed", "failed_stage": null, "attempts": {"outfit": 2, "fit_card": 1}, "provider": "scripted", "scenario": "retry-once"}
+{"timestamp": "2026-11-18T03:52:44.505630+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": "Pair the tee with straight-leg jeans and white sneakers.", "fit_card": "Straight-leg jeans and sneakers keep it casual. The tee was $18 on depop."}, "error": null, "duration_seconds": 2.3589999999967404, "stage_seconds": {"outfit": 0.5, "fit_card": 0.0}, "outcome": "completed", "failed_stage": null, "attempts": {"outfit": 2, "fit_card": 1}, "provider": "scripted", "scenario": "retry-once"}
+{"timestamp": "2026-11-18T03:52:46.868904+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": "Pair the tee with straight-leg jeans and white sneakers.", "fit_card": "Straight-leg jeans and sneakers keep it casual. The tee was $18 on depop."}, "error": null, "duration_seconds": 2.5160000000032596, "stage_seconds": {"outfit": 0.5, "fit_card": 0.0}, "outcome": "completed", "failed_stage": null, "attempts": {"outfit": 2, "fit_card": 1}, "provider": "scripted", "scenario": "retry-once"}
+{"timestamp": "2026-11-18T03:52:49.388759+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. Still rate limited after 3 attempts. Wait at least 1 second before trying again.", "duration_seconds": 2.547000000020489, "stage_seconds": {"outfit": 0.5790000000270084}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 3, "fit_card": 0}, "provider": "scripted", "scenario": "rate-limited"}
+{"timestamp": "2026-11-18T03:52:51.939054+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. Still rate limited after 3 attempts. Wait at least 1 second before trying again.", "duration_seconds": 2.5, "stage_seconds": {"outfit": 0.5780000000377186}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 3, "fit_card": 0}, "provider": "scripted", "scenario": "rate-limited"}
+{"timestamp": "2026-11-18T03:52:57.138094+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. The model returned no text. Try running the same search again.", "duration_seconds": 2.562000000034459, "stage_seconds": {"outfit": 0.375}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 1, "fit_card": 0}, "provider": "scripted", "scenario": "blank-outfit"}
+{"timestamp": "2026-11-18T03:52:59.708976+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. The model returned no text. Try running the same search again.", "duration_seconds": 2.327999999979511, "stage_seconds": {"outfit": 0.375}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 1, "fit_card": 0}, "provider": "scripted", "scenario": "blank-outfit"}
+{"timestamp": "2026-11-18T03:53:04.310753+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": "Pair the tee with straight-leg jeans and white sneakers.", "fit_card": null}, "error": "Fit card unavailable. The model request failed (HTTP 400). Try again.", "duration_seconds": 2.2179999999934807, "stage_seconds": {"outfit": 0.375, "fit_card": 0.0}, "outcome": "partial", "failed_stage": "fit_card", "attempts": {"outfit": 1, "fit_card": 1}, "provider": "scripted", "scenario": "fit-card-failure"}
+{"timestamp": "2026-11-18T03:52:15.376055+00:00", "input": {"query": "vintage graphic tee under $30"}, "output": {"listing": {"title": "Y2K Baby Tee — Butterfly Print", "price": 18.0, "platform": "depop"}, "outfit": null, "fit_card": null}, "error": "Outfit unavailable. The model is rate limited. Wait at least 75 seconds before trying again.", "duration_seconds": 2.5929999999934807, "stage_seconds": {"outfit": 0.5619999999762513}, "outcome": "partial", "failed_stage": "outfit", "attempts": {"outfit": 1, "fit_card": 0}, "provider": "scripted", "scenario": "retry-after-budget"}
+```
+
+The first live run exposed a Gemini compatibility issue. The SDK sent the
+six-second client timeout as the server deadline, and Gemini rejected it
+because the server deadline must be at least ten seconds. The adapter now
+sends a ten-second server deadline and applies the shorter timeout locally.
+All 15 scripted trials passed again with the server requirement enforced by
+the offline transport.
+
+### What It Costs
+
+I ran `vintage graphic tee under $30` ten times against live
+`gemini-3.5-flash-lite` with caching disabled. I used the starter example
+wardrobe and direct local search so that each run selected the same listing.
+Each query completed outfit and fit-card generation. I took
+`generate.token_counts()` snapshots immediately before and after each query
+and subtracted them to get the prompt and candidate-output tokens for that
+query. I split the runs into two batches to stay within the request window.
+
+The ten queries used 6,666 prompt tokens and 1,726 output tokens, or 8,392
+tokens total. That is **839.2 tokens per query** (8,392 ÷ 10). If 100 people
+each ran one query a day, that would be **83,920 tokens per day**
+(839.2 × 100). The [live usage records](results/capstone_live_token_usage_2026-11-17_230459.jsonl)
+contain the per-query measurements.
+
+### What's Still Broken
+
+All five scored criteria passed. I would tighten criterion 1 to require the
+same eight-second cutoff when the provider sends small chunks slowly. The
+current test covers a stalled response. The adapter checks elapsed time when
+the SDK call returns, so a response that keeps sending data can stay open
+past the stage budget. I stopped after measuring the retry-guidance change
+because the capstone calls for one measured improvement.
+
+I would first add a controlled slow-stream test and a deadline that can
+cancel the request while it is still open. I would verify that FitFindr
+still shows the listing and a timeout message within eight seconds.
+
+### How I Used AI
+
+I used Codex to plan the changes, build the scripted failure harness, and
+implement the failure handling and logging. I approved the criteria before
+the baseline and approved each commit separately. The verdicts and the
+retry-guidance change came from the recorded CLI output and attempt counts.
 
 ---
 

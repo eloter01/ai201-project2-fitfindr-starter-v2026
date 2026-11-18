@@ -246,8 +246,9 @@ to back while debugging can cross the per-minute limit.
 
 `generate.py` handles it:
 
-- **It paces itself** and says when it's waiting. **A pause is the starter
-  doing its job, not a bug.**
+- **It paces requests** and retries `429` responses within the eight-second
+  model-stage budget and three-attempt limit. When a provider delay exceeds
+  the remaining budget, FitFindr returns the partial result with retry guidance.
 - **It reuses answers** to prompts already sent, while you build.
 - **It stops** if a session makes an unreasonable number of calls, rather than
   draining your day's allowance. For an agent, that usually means a loop isn't
@@ -267,7 +268,7 @@ is the most common architectural failure in production agents.
 | `The planning loop isn't built yet` | Correct, at the start. That's the TODO in `agent.py` |
 | `No GEMINI_API_KEY found` | No `.env`, or the key wasn't pasted in. On Windows check it didn't save as `.env.txt` |
 | A message saying the model couldn't be reached | Usually a bad key. This is also **exactly what unit 4 Milestone 2 asks you to trigger on purpose** |
-| `[rate limit] ... Waiting 34s` | Working as intended. Leave it |
+| `[rate limit] retrying in ...` | FitFindr is waiting briefly before retrying. If the run stops with a wait recommendation, follow that delay. |
 | `[serve] another request is still running` | Also working as intended. `serve.py` answers one request at a time; yours is queued behind one that's mid-run |
 | `QuotaGuard: This session has made 300 requests` | A loop isn't ending. Find it before raising the budget |
 | `The loop ran 11 times, past MAX_ITERATIONS` | Same thing, caught earlier |
