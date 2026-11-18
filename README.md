@@ -948,4 +948,19 @@ working while the MCP side is half-built.
 
 ---
 
+## Capstone
+
+### The Shape
+
+**B. Harden against failure.** FitFindr will keep showing the selected listing
+when Gemini cannot suggest an outfit. If Gemini suggests an outfit but cannot
+write the fit card, the CLI will show both the listing and the outfit. The
+extension will bound waits and retries, handle blank model responses, and record
+what happened in a local run log. Scripted failures will make the demo repeatable.
+
+Search ranking, wardrobe validation, and Flask deployment are outside the scope
+of this capstone.
+
+---
+
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**

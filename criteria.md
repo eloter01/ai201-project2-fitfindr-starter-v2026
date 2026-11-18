@@ -139,3 +139,68 @@ Criteria 1, 3, and 4 all use the same query. In scenarios.py, list it once each 
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+## Capstone acceptance criteria
+
+Run each scenario three times using `vintage graphic tee under $30`, the
+example wardrobe, and a fresh scripted Gemini response sequence with the cache
+disabled. Score the CLI output and the model-attempt records from each trial.
+
+### 1. A stalled outfit request ends within eight seconds
+
+When the scripted outfit response stays pending beyond eight seconds, the
+outfit stage ends within eight seconds in **3 of 3 trials**. Use a monotonic
+clock to measure from the start of outfit generation until it hands control
+back to the agent. Include provider calls, pacing, and retry waits in that
+interval. The CLI displays the selected listing and a timeout message.
+
+**Why this target**
+
+Eight seconds gives the model stage a short window to respond while the user
+already has a listing available. Starting the clock after search measures the
+part of the run this extension is meant to bound.
+
+### 2. One rate limit is recovered with one retry
+
+When the first outfit attempt returns `429` with a retry delay that fits the
+stage budget, and the next outfit attempt and fit-card request succeed, the CLI
+shows the fit card after exactly two outfit attempts in **3 of 3 trials**.
+
+**Why this target**
+
+One retry is enough to recover from a single scripted rate limit. The attempt
+count shows whether FitFindr recovered without sending extra requests.
+
+### 3. Repeated rate limits stop within three attempts
+
+When every outfit attempt returns `429` with a short retry delay, the CLI shows
+the selected listing and a rate-limit message after at most three outfit
+attempts in **3 of 3 trials**. The count includes the initial call.
+
+**Why this target**
+
+Three attempts allow up to two retries for a temporary rate limit. If the
+service keeps rejecting requests, the user can act on the listing while the
+service recovers.
+
+### 4. A blank outfit produces zero fit-card requests
+
+When the outfit response contains only whitespace, the CLI says the outfit is
+unavailable and the run records zero fit-card requests in **3 of 3 trials**.
+
+**Why this target**
+
+The fit card depends on a real outfit. A model call at this point would spend
+quota on a caption based on missing information.
+
+### 5. A fit-card failure keeps the generated outfit visible
+
+When the outfit response succeeds and the fit-card request fails with a
+nonretryable provider error, the CLI displays the selected listing, the outfit
+text returned by the script, and a message that the fit card is unavailable in
+**3 of 3 trials**.
+
+**Why this target**
+
+The listing and outfit are useful on their own. Comparing the text to the
+script confirms the CLI displayed the outfit that succeeded in that run.
