@@ -106,12 +106,17 @@ def _run_worker(scenario_id: str) -> dict:
                         "Scripted outfit response stalled.", request=request
                     )
                 time.sleep(SLOW_RESPONSE_SECONDS)
-            if scenario_id == "rate-limited" or (
+            if scenario_id in ("rate-limited", "retry-after-budget") or (
                 scenario_id == "retry-once" and attempts[stage] == 1
             ):
-                return httpx.Response(429, json={"error": {
-                    "code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Please retry in 0.1s",
-                }})
+                headers = {"Retry-After": "75"} if scenario_id == "retry-after-budget" else None
+                return httpx.Response(
+                    429, headers=headers, json={"error": {
+                        "code": 429,
+                        "status": "RESOURCE_EXHAUSTED",
+                        "message": "Please retry in 0.1s",
+                    }},
+                )
             text = "   " if scenario_id == "blank-outfit" else OUTFIT
         else:
             if scenario_id == "fit-card-failure":

@@ -32,6 +32,7 @@ from __future__ import annotations
 from email.utils import parsedate_to_datetime
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -233,8 +234,8 @@ def _explain(exc: APIError) -> str:
     return f"The model request failed (HTTP {exc.code}). Try again."
 
 
-def _retry_delay(exc: APIError, attempt: int) -> float:
-    """Use the provider's retry delay in seconds or fall back to backoff."""
+def _provider_retry_delay(exc: APIError) -> float | None:
+    """Read the provider's retry delay in seconds, if supplied."""
     if exc.response is not None:
         retry_after = exc.response.headers.get("Retry-After", "").strip()
         if retry_after.isascii() and retry_after.isdecimal():
@@ -252,7 +253,15 @@ def _retry_delay(exc: APIError, attempt: int) -> float:
         re.search(r"retryDelay['\"]?\s*:\s*['\"](\d+(?:\.\d+)?)s", text)
         or re.search(r"retry in (\d+(?:\.\d+)?)\s*s", text, re.I)
     )
-    return float(match.group(1)) if match else 2.0 ** (attempt - 1)
+    return float(match.group(1)) if match else None
+
+
+def _retry_guidance(delay: float | None) -> str:
+    if delay is None or delay <= 0 or not math.isfinite(delay):
+        return "Wait a minute and try again."
+    seconds = math.ceil(delay)
+    unit = "second" if seconds == 1 else "seconds"
+    return f"Wait at least {seconds} {unit} before trying again."
 
 
 def _get_client():
@@ -319,6 +328,7 @@ def generate(
     from google.genai.errors import APIError
     from requests.exceptions import RequestException, Timeout as RequestsTimeout
 
+    retry_delay = None
     for attempt in range(1, config.MODEL_MAX_ATTEMPTS + 1):
         _check_budget()
         _wait_for_slot(request_deadline)
@@ -352,12 +362,13 @@ def generate(
                 raise ModelTimeout(_MODEL_TIMEOUT_MESSAGE) from exc
             if exc.code != 429:
                 raise ModelUnavailable(_explain(exc)) from exc
+            retry_delay = _provider_retry_delay(exc)
             if attempt == config.MODEL_MAX_ATTEMPTS:
                 break
-            backoff = _retry_delay(exc, attempt)
+            backoff = retry_delay if retry_delay is not None else 2.0 ** (attempt - 1)
             if backoff >= request_deadline - time.monotonic():
                 raise ModelRateLimited(
-                    "The model is rate limited. Wait a minute and try again."
+                    f"The model is rate limited. {_retry_guidance(retry_delay)}"
                 ) from exc
             print(
                 f"  [rate limit] retrying in {backoff:g}s "
@@ -382,5 +393,5 @@ def generate(
 
     raise ModelRateLimited(
         f"Still rate limited after {config.MODEL_MAX_ATTEMPTS} attempts. "
-        "Wait a minute and try again."
+        f"{_retry_guidance(retry_delay)}"
     )

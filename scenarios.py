@@ -74,6 +74,7 @@ CAPSTONE_SCENARIOS = {
         ("rate-limited", "outfit stays rate limited", 3),
         ("blank-outfit", "blank outfit response", 4),
         ("fit-card-failure", "fit card fails after the outfit succeeds", 5),
+        ("retry-after-budget", "provider wait exceeds the stage budget", None),
         ("success", "scripted successful query", None),
     )
 }

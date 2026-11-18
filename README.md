@@ -958,25 +958,29 @@ what happened in a local run log. Scripted failures will make the demo repeatabl
 Search ranking, wardrobe validation, and Flask deployment are outside the scope
 of this capstone.
 
-### Run Log — Capstone Baseline
+### Run Log — Capstone Before and After
 
 I ran `python run_eval.py --capstone --tries 3 --label capstone_before` on the
 initial hardening layer. Each trial used the same query, example wardrobe,
 direct local search, and a fresh scripted Gemini response sequence with caching
-disabled. I scored the output against the [capstone criteria](criteria.md#capstone-acceptance-criteria).
-The [full CLI report](results/capstone_run_2026-11-17_224725_157836_capstone_before.md)
-and [JSONL records](results/capstone_run_2026-11-17_224725_157836_capstone_before.jsonl)
-contain all 15 trials.
+disabled. I reran the same scenarios with `--label capstone_after` after
+changing the rate-limit guidance, using the same
+[capstone criteria](criteria.md#capstone-acceptance-criteria) to score both runs.
 
-| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-| --- | --- | --- | --- | --- | --- |
-| 1. Stalled outfit request | Listing and timeout message within the 8 s outfit-stage limit | PASS (6.375 s) | PASS (6.375 s) | PASS (6.375 s) | MET (3/3) |
-| 2. Recoverable `429` | Fit card after exactly two outfit attempts | PASS (2) | PASS (2) | PASS (2) | MET (3/3) |
-| 3. Persistent `429` | Listing and rate-limit message after at most three outfit attempts | PASS (3) | PASS (3) | PASS (3) | MET (3/3) |
-| 4. Blank outfit | Outfit unavailable, zero fit-card requests | PASS (0) | PASS (0) | PASS (0) | MET (3/3) |
-| 5. Fit-card failure | Listing, original outfit, and fit-card error | PASS | PASS | PASS | MET (3/3) |
+- Before: [CLI report](results/capstone_run_2026-11-17_224725_157836_capstone_before.md)
+  and [JSONL records](results/capstone_run_2026-11-17_224725_157836_capstone_before.jsonl)
+- After: [CLI report](results/capstone_run_2026-11-17_225215_381467_capstone_after.md)
+  and [JSONL records](results/capstone_run_2026-11-17_225215_381467_capstone_after.jsonl)
 
-The excerpts are from trial 1 of each scenario. `app.py::show_session`
+| Criterion | Target | Before 1 | Before 2 | Before 3 | Before verdict | After 1 | After 2 | After 3 | After verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1. Stalled outfit request | Listing and timeout message within the 8 s outfit-stage limit | PASS (6.375 s) | PASS (6.375 s) | PASS (6.375 s) | MET (3/3) | PASS (6.562 s) | PASS (6.375 s) | PASS (6.375 s) | MET (3/3) |
+| 2. Recoverable `429` | Fit card after exactly two outfit attempts | PASS (2) | PASS (2) | PASS (2) | MET (3/3) | PASS (2) | PASS (2) | PASS (2) | MET (3/3) |
+| 3. Persistent `429` | Listing and rate-limit message after at most three outfit attempts | PASS (3) | PASS (3) | PASS (3) | MET (3/3) | PASS (3) | PASS (3) | PASS (3) | MET (3/3) |
+| 4. Blank outfit | Outfit unavailable, zero fit-card requests | PASS (0) | PASS (0) | PASS (0) | MET (3/3) | PASS (0) | PASS (0) | PASS (0) | MET (3/3) |
+| 5. Fit-card failure | Listing, original outfit, and fit-card error | PASS | PASS | PASS | MET (3/3) | PASS | PASS | PASS | MET (3/3) |
+
+The following excerpts are from baseline trial 1 of each scenario. `app.py::show_session`
 produced the CLI lines, `agent.py::run_agent` set the stage errors, and
 `run_eval.py::write_report` printed the timings and HTTP attempt counts it
 received from `capstone_eval.py::_run_worker`.
@@ -1038,6 +1042,63 @@ delay into the message. I would require that diagnostic to show a wait of at
 least 75 seconds while still stopping after one attempt and showing the
 listing. The five scored criteria and fixtures will stay the same for the
 comparison.
+
+### Retry guidance improvement
+
+`generate.py::generate` now uses the provider's retry delay in the error shown
+when it stops retrying. It rounds fractional seconds up. With the same
+`Retry-After: 75` diagnostic, the outfit stage stopped in 0.562 seconds after
+one request, and the CLI displayed the listing and this message.
+
+```text
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+  Outfit unavailable. The model is rate limited. Wait at least 75 seconds before trying again.
+```
+
+Reproduce it with `python run_eval.py --capstone --scenario retry-after-budget --tries 1`.
+See the [diagnostic report](results/capstone_run_2026-11-17_225215_376055_retry_after_diagnostic.md)
+and [JSONL record](results/capstone_run_2026-11-17_225215_376055_retry_after_diagnostic.jsonl).
+
+All five criteria still met their targets. These are excerpts from trial 1
+after the improvement, produced by the same CLI renderer and report writer.
+
+**1. Stalled outfit request**
+
+```text
+- outfit elapsed: 6.562000 s
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+  Outfit unavailable. The model request timed out. Try again.
+```
+
+**2. Recoverable rate limit**
+
+```text
+- outfit HTTP attempts: 2
+  Fit card: Straight-leg jeans and sneakers keep it casual. The tee was $18 on depop.
+```
+
+**3. Persistent rate limit**
+
+```text
+- outfit HTTP attempts: 3
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+  Outfit unavailable. Still rate limited after 3 attempts. Wait at least 1 second before trying again.
+```
+
+**4. Blank outfit**
+
+```text
+- fit_card HTTP attempts: 0
+  Outfit unavailable. The model returned no text. Try running the same search again.
+```
+
+**5. Fit-card failure**
+
+```text
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+  Outfit:   Pair the tee with straight-leg jeans and white sneakers.
+  Fit card unavailable. The model request failed (HTTP 400). Try again.
+```
 
 ---
 
