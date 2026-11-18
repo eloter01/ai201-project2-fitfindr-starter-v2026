@@ -18,7 +18,7 @@ What this does for you:
   • Stops if a session makes an unreasonable number of calls, rather than
     silently draining your day's allowance. A runaway agent loop is the
     classic way to do that.
-  • Retries when the service says you're going too fast.
+  • Bounds request timeouts and rate-limit retries within a model-stage budget.
   • Returns a readable message when the model can't be reached, instead of a
     stack trace. Unit 4 Milestone 2 has you trigger exactly that on purpose.
   • Counts your calls and the tokens they used, so quota — and cost — are
@@ -27,14 +27,21 @@ What this does for you:
 The model name and the temperature live in config.py, not here.
 """
 
+from __future__ import annotations
+
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import os
 import re
 import sys
 import time
+from typing import TYPE_CHECKING
 
 import config
+
+if TYPE_CHECKING:
+    from google.genai.errors import APIError
 
 _call_times: list[float] = []
 _session_calls = 0
@@ -44,20 +51,23 @@ _output_tokens = 0
 _client = None
 _budget_warned = False
 
+_MODEL_TIMEOUT_MESSAGE = "The model request timed out. Try again."
+
 
 class QuotaGuard(Exception):
     """Raised when a session blows through its request budget."""
 
 
 class ModelUnavailable(Exception):
-    """
-    Raised when the model can't be reached at all — a bad key, no network, a
-    model name that doesn't resolve.
+    """A model failure the agent can report while retaining earlier results."""
 
-    This exists so your agent can catch one specific thing and say something
-    useful, instead of showing a user a stack trace. Unit 4 Milestone 2 has you
-    trigger it deliberately by changing one character of your key.
-    """
+
+class ModelTimeout(ModelUnavailable):
+    """The transport or the model-stage time budget expired."""
+
+
+class ModelRateLimited(ModelUnavailable):
+    """A rate limit prevents another request within the stage budget."""
 
 
 # ─── Cache ───────────────────────────────────────────────────────────────────
@@ -99,8 +109,8 @@ def clear_cache() -> int:
 # ─── Pacing and guards ───────────────────────────────────────────────────────
 
 
-def _wait_for_slot() -> None:
-    """Sleep, if we've used up this minute's allowance."""
+def _wait_for_slot(deadline: float) -> None:
+    """Wait for a local request slot if it opens within the stage budget."""
     now = time.monotonic()
     _call_times[:] = [t for t in _call_times if now - t < 60.0]
 
@@ -108,6 +118,10 @@ def _wait_for_slot() -> None:
         return
 
     sleep_for = 60.0 - (now - _call_times[0]) + 0.1
+    if sleep_for >= deadline - now:
+        raise ModelRateLimited(
+            "The local model rate limit is full. Wait a minute and try again."
+        )
     if sleep_for > 0:
         # Only worth announcing if it's long enough to notice. Otherwise the
         # message reads "Waiting 0s", which looks like something went wrong.
@@ -201,59 +215,63 @@ def _record_tokens(response) -> None:
 # ─── The call ────────────────────────────────────────────────────────────────
 
 
-def _explain(exc: Exception) -> str:
+def _explain(exc: APIError) -> str:
     """Turn a provider exception into something a person can act on."""
     message = str(exc).lower()
-    if "api key" in message or "api_key" in message or "unauthenticated" in message:
+    if exc.code == 401 or "api key" in message or "api_key" in message:
         return (
             "The model rejected your API key. Check GEMINI_API_KEY in your .env "
             "file, or create a fresh key at aistudio.google.com."
         )
-    if "not found" in message or "404" in message:
+    if exc.code == 404:
         return (
             f"The model name '{config.MODEL}' did not resolve. If you changed "
             f"AI201_MODEL in your .env, put it back. Otherwise post in the help "
             f"channel — this is not something you caused."
         )
-    if "connection" in message or "timeout" in message or "network" in message:
-        return "Couldn't reach the model. Check your internet connection and try again."
-    return f"Couldn't reach the model: {exc}"
+    return f"The model request failed (HTTP {exc.code}). Try again."
 
 
-def _retry_delay(exc: Exception, attempt: int) -> float:
-    """
-    How long to wait before retrying a call the service pushed back on.
+def _retry_delay(exc: APIError, attempt: int) -> float:
+    """Use the provider's retry delay in seconds or fall back to backoff."""
+    if exc.response is not None:
+        retry_after = exc.response.headers.get("Retry-After", "").strip()
+        if retry_after.isascii() and retry_after.isdecimal():
+            return float(retry_after)
+        if retry_after:
+            try:
+                retry_time = parsedate_to_datetime(retry_after)
+                if retry_time.tzinfo is not None:
+                    return max(0.0, retry_time.timestamp() - time.time())
+            except (ValueError, OverflowError, OSError):
+                pass
 
-    When you cross the per-minute limit, the service usually says how long it
-    wants you to wait — "Please retry in 29.7s", or a retryDelay field. Honour
-    that, because the limit is per *minute* and a 1-2-4-8 backoff gives up
-    about fifteen seconds in, well before the minute is over. That's the
-    difference between a run that pauses and a run that dies.
-
-    Falls back to exponential backoff when the service doesn't say.
-    """
     text = str(exc)
     match = (
-        re.search(r"retry in (\d+(?:\.\d+)?)\s*s", text, re.I)
-        or re.search(r"retryDelay['\"]?\s*:\s*['\"](\d+(?:\.\d+)?)s", text)
+        re.search(r"retryDelay['\"]?\s*:\s*['\"](\d+(?:\.\d+)?)s", text)
+        or re.search(r"retry in (\d+(?:\.\d+)?)\s*s", text, re.I)
     )
-    hinted = float(match.group(1)) + 1.0 if match else 0.0
-    return min(65.0, max(2.0 ** attempt, hinted))
+    return float(match.group(1)) if match else 2.0 ** (attempt - 1)
 
 
 def _get_client():
     global _client
     if _client is None:
         from google import genai
+        from google.genai.types import HttpOptions
 
         key = os.getenv("GEMINI_API_KEY", "").strip()
         if not key:
-            raise RuntimeError(
+            raise ModelUnavailable(
                 "No GEMINI_API_KEY found.\n"
                 "Copy .env.example to .env and paste your key in, then try "
                 "again. `python test.py` will confirm it's working."
             )
-        _client = genai.Client(api_key=key)
+        # Older SDKs use one attempt and do not expose retry_options.
+        http_options = {}
+        if "retry_options" in HttpOptions.model_fields:
+            http_options["retry_options"] = {"attempts": 1}
+        _client = genai.Client(api_key=key, http_options=http_options)
     return _client
 
 
@@ -283,6 +301,9 @@ def generate(
     """
     global _session_calls, _cache_hits
 
+    deadline = time.monotonic() + config.MODEL_STAGE_BUDGET_SECONDS
+    # Leave a little time for the SDK and agent to hand off the result.
+    request_deadline = deadline - 0.1
     use_cache = cache and config.CACHE_ENABLED
     temperature = config.TEMPERATURE if temperature is None else temperature
     key = _cache_key(prompt, system, temperature)
@@ -293,54 +314,68 @@ def generate(
             _cache_hits += 1
             return hit
 
-    _check_budget()
+    import httpx
+    from google.genai.errors import APIError
+    from requests.exceptions import RequestException, Timeout as RequestsTimeout
 
-    last_error: Exception | None = None
-    for attempt in range(config.MAX_RETRIES):
-        _wait_for_slot()
+    for attempt in range(1, config.MODEL_MAX_ATTEMPTS + 1):
+        _check_budget()
+        _wait_for_slot(request_deadline)
+        client = _get_client()
+        now = time.monotonic()
+        remaining_ms = int((request_deadline - now) * 1000)
+        if remaining_ms <= 0:
+            raise ModelTimeout(_MODEL_TIMEOUT_MESSAGE)
+
+        call_config = {
+            "temperature": temperature,
+            "http_options": {"timeout": min(config.MODEL_REQUEST_TIMEOUT_MS, remaining_ms)},
+        }
+        if system:
+            call_config["system_instruction"] = system
+        _call_times.append(now)
+        _session_calls += 1
+
         try:
-            client = _get_client()
-            _call_times.append(time.monotonic())
-            _session_calls += 1
-
-            call_config = {"temperature": temperature}
-            if system:
-                call_config["system_instruction"] = system
-            kwargs = {
-                "model": config.MODEL,
-                "contents": prompt,
-                "config": call_config,
-            }
-
-            response = client.models.generate_content(**kwargs)
-            _record_tokens(response)
-            text = (response.text or "").strip()
-
-            if use_cache:
-                _cache_write(key, text)
-            return text
-
-        except Exception as exc:  # noqa: BLE001 — surfaced below
-            last_error = exc
-            message = str(exc).lower()
-            rate_limited = (
-                "429" in message
-                or "resource" in message and "exhaust" in message
-                or "rate" in message and "limit" in message
+            response = client.models.generate_content(
+                model=config.MODEL, contents=prompt, config=call_config
             )
-            if not rate_limited:
+        except (httpx.TimeoutException, RequestsTimeout, TimeoutError) as exc:
+            raise ModelTimeout(_MODEL_TIMEOUT_MESSAGE) from exc
+        except (httpx.RequestError, RequestException) as exc:
+            raise ModelUnavailable(
+                "Couldn't reach the model. Check your internet connection and try again."
+            ) from exc
+        except APIError as exc:
+            if exc.code in (408, 504):
+                raise ModelTimeout(_MODEL_TIMEOUT_MESSAGE) from exc
+            if exc.code != 429:
                 raise ModelUnavailable(_explain(exc)) from exc
+            if attempt == config.MODEL_MAX_ATTEMPTS:
+                break
             backoff = _retry_delay(exc, attempt)
+            if backoff >= request_deadline - time.monotonic():
+                raise ModelRateLimited(
+                    "The model is rate limited. Wait a minute and try again."
+                ) from exc
             print(
-                f"  [rate limit] service pushed back. Waiting {backoff:.0f}s "
-                f"(attempt {attempt + 1} of {config.MAX_RETRIES}). This is "
-                f"the limiter doing its job, not a bug.",
+                f"  [rate limit] retrying in {backoff:g}s "
+                f"(attempt {attempt + 1} of {config.MODEL_MAX_ATTEMPTS}).",
                 file=sys.stderr,
                 flush=True,
             )
             time.sleep(backoff)
+            continue
 
-    raise RuntimeError(
-        f"Still rate limited after {config.MAX_RETRIES} attempts. Wait a "
-        f"minute and try again — your key is fine.\nLast error: {last_error}"
+        _record_tokens(response)
+        if time.monotonic() >= deadline:
+            raise ModelTimeout(_MODEL_TIMEOUT_MESSAGE)
+        text = (response.text or "").strip()
+        if use_cache:
+            _cache_write(key, text)
+        return text
+
+    raise ModelRateLimited(
+        f"Still rate limited after {config.MODEL_MAX_ATTEMPTS} attempts. "
+        "Wait a minute and try again."
     )

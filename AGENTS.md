@@ -42,8 +42,9 @@ starter notes predate the implemented tools and MCP registration.
   so use the MCP client command to check registration separately.
 - `generate.py` is the shared Gemini adapter for the application. It paces
   requests, retries rate limits, caches responses in `.cache/`, and records
-  process-level call and token counts. Exhausted rate-limit retries currently
-  raise `RuntimeError`, outside the agent's `ModelUnavailable` handler.
+  process-level call and token counts. Each model stage has a time budget and
+  a cap on attempts. Timeouts and rate limits raise `ModelUnavailable`
+  subclasses the agent can catch.
   `config.py` loads `.env`, configures Windows console UTF-8, and holds model,
   cache, pacing, and iteration settings. `AI201_MODEL` overrides the configured
   model and `AI201_CACHE=0` bypasses the cache.

@@ -68,8 +68,6 @@ MODEL = os.getenv("AI201_MODEL", "gemini-3.5-flash-lite")
 
 
 # ─── Rate limiting and quota guards ──────────────────────────────────────────
-# You should not need to touch these.
-#
 # This is the heaviest pair in the course for call volume — one agent run is
 # several requests, because two of your three tools call the model. Iterating
 # quickly will cross the per-minute limit. The adapter paces you and says when
@@ -84,7 +82,12 @@ MODEL = os.getenv("AI201_MODEL", "gemini-3.5-flash-lite")
 
 REQUESTS_PER_MINUTE = 15
 SESSION_REQUEST_BUDGET = 300
-MAX_RETRIES = 5
+
+# The stage budget includes local pacing and retry delays. The request timeout
+# is an upper limit for each HTTP attempt, and can shrink on later attempts.
+MODEL_STAGE_BUDGET_SECONDS = 8.0
+MODEL_REQUEST_TIMEOUT_MS = 6000
+MODEL_MAX_ATTEMPTS = 3
 
 CACHE_DIR = ROOT / ".cache"
 
