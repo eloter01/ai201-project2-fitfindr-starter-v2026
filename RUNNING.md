@@ -70,12 +70,17 @@ without a Gemini key and print the same result view as `app.py ask`.
 ```sh
 python run_eval.py --capstone --scenario retry-once --tries 1 --label demo-retry
 python run_eval.py --capstone --scenario fit-card-failure --tries 1 --label demo-fit-card
-python run_eval.py --capstone --tries 3 --label capstone_before
+python run_eval.py --capstone --scenario retry-after-budget --tries 1 --label demo-retry-guidance
+python run_eval.py --capstone --tries 3 --label capstone_check
 ```
 
 The first demo recovers from one `429` and shows a fit card. The second shows
-the listing and outfit alongside the fit-card error. The third runs all five
-scored scenarios three times each.
+the listing and outfit alongside the fit-card error. The third shows the
+selected listing and tells the user to wait at least 75 seconds after the
+provider's retry delay exceeds the outfit-stage budget. The last command runs
+all five scored scenarios three times each on the current checkout. The
+[capstone results in the README](README.md#run-log--capstone-before-and-after)
+link to the recorded before-and-after reports.
 
 Each live CLI query appends a JSON Lines record to `results/fitfindr_runs.jsonl`.
 Git ignores this local file because it includes query and result text. Each
